@@ -118,12 +118,9 @@ install -m 0644 "$ROOT/README.md" "$STAGE/README.md"
 install -m 0644 "$ROOT/LICENSE" "$STAGE/LICENSE"
 install -m 0755 "$ROOT/scripts/install.sh" "$STAGE/install.sh"
 install -m 0755 "$ROOT/scripts/uninstall.sh" "$STAGE/uninstall.sh"
-for doc in install.md packaging.md release-checklist.md linux.md; do
+for doc in install.md operations.md packaging.md architecture.md building.md release-checklist.md linux.md docker.md service.md signing.md; do
   install -m 0644 "$ROOT/docs/$doc" "$STAGE/docs/$doc"
 done
-if [ -f "$CORE_DIR/docs/operations.md" ]; then
-  install -m 0644 "$CORE_DIR/docs/operations.md" "$STAGE/docs/operations.md"
-fi
 install -m 0755 "$ROOT/scripts/fetch-ffmpeg.ps1" "$STAGE/tools/fetch-ffmpeg.ps1" || true
 install -m 0755 "$ROOT/scripts/verify-ffmpeg.ps1" "$STAGE/tools/verify-ffmpeg.ps1" || true
 

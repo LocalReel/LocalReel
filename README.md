@@ -89,7 +89,7 @@ at logon, use the included `install-task.ps1` (see [docs/service.md](docs/servic
 > so Windows SmartScreen will show "Windows protected your PC" for both. Verify
 > the SHA256 of what you downloaded against `SHA256SUMS.txt` before running it.
 > Code signing is a public v1.0 blocker — see
-> [docs/release/v1.0-readiness.md](docs/release/v1.0-readiness.md).
+> [docs/release/v1.0-readiness.md](https://github.com/LocalReel/LocalReel/blob/main/docs/release/v1.0-readiness.md).
 
 ### 简体中文快速说明
 
@@ -175,9 +175,8 @@ A public **v1.0** is blocked by two things:
    publishes artifacts automatically.
 
 Details, evidence and the remaining checklist:
-[docs/release/v1.0-readiness.md](docs/release/v1.0-readiness.md).
-Release notes: [0.3.0](docs/release/v0.3.0.md); older releases live in
-[docs/release/](docs/release/).
+[docs/release/v1.0-readiness.md](https://github.com/LocalReel/LocalReel/blob/main/docs/release/v1.0-readiness.md).
+Release notes: [0.3.0](https://github.com/LocalReel/LocalReel/blob/main/docs/release/v0.3.0.md); older releases live in [docs/release/](https://github.com/LocalReel/LocalReel/tree/main/docs/release).
 
 ## Documentation
 
@@ -186,7 +185,8 @@ Release notes: [0.3.0](docs/release/v0.3.0.md); older releases live in
 - [Architecture](docs/architecture.md) · [Building from source](docs/building.md) ·
   [Packaging](docs/packaging.md)
 - [Signing](docs/signing.md) · [Release checklist](docs/release-checklist.md) ·
-  [v1.0 readiness](docs/release/v1.0-readiness.md)
+  [v1.0 readiness](https://github.com/LocalReel/LocalReel/blob/main/docs/release/v1.0-readiness.md)
+  · [Operations](docs/operations.md)
 
 ## License
 

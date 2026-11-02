@@ -142,15 +142,14 @@ foreach ($script in @('install.ps1', 'uninstall.ps1', 'install-task.ps1')) {
     Copy-Item -LiteralPath (Join-Path $root "scripts\$script") -Destination $stage
 }
 
-# Documentation shipped next to the binary: product docs plus the core
-# operations manual (a component doc that users need at runtime).
+# Documentation shipped next to the binary. Release notes and the readiness
+# report stay on GitHub (their hashes change per build, so shipping them would
+# immediately drift); the packaged README links to them by URL.
 New-Item -ItemType Directory -Force -Path (Join-Path $stage 'docs') | Out-Null
-foreach ($doc in @('install.md', 'packaging.md', 'linux.md', 'docker.md', 'service.md', 'signing.md', 'release-checklist.md')) {
+foreach ($doc in @('install.md', 'operations.md', 'packaging.md', 'architecture.md', 'building.md', 'linux.md', 'docker.md', 'service.md', 'signing.md', 'release-checklist.md')) {
     $path = Join-Path $root "docs\$doc"
     if (Test-Path -LiteralPath $path) { Copy-Item -LiteralPath $path -Destination (Join-Path $stage 'docs') }
 }
-$operations = Join-Path $core 'docs\operations.md'
-if (Test-Path -LiteralPath $operations) { Copy-Item -LiteralPath $operations -Destination (Join-Path $stage 'docs') }
 
 New-Item -ItemType Directory -Force -Path (Join-Path $stage 'tools') | Out-Null
 Copy-Item -LiteralPath (Join-Path $root 'scripts\fetch-ffmpeg.ps1') -Destination (Join-Path $stage 'tools')
