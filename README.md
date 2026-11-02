@@ -32,7 +32,8 @@ testable and releasable. See [docs/architecture.md](docs/architecture.md).
 - **Local by design** — binds loopback only by default, single user, no
   authentication layer; `ffmpeg`/`ffprobe` are not bundled and are discovered
   next to the binary or on `PATH`.
-- **Distribution** — Windows zip and per-user MSI, Linux tarball, Docker image.
+- **Distribution** — Windows zip and per-user MSI; Linux tarball and a Docker
+  image are built from source on those hosts.
 
 ## Download and install
 
@@ -175,7 +176,8 @@ A public **v1.0** is blocked by two things:
 
 Details, evidence and the remaining checklist:
 [docs/release/v1.0-readiness.md](docs/release/v1.0-readiness.md).
-Release notes live in [docs/release/](docs/release/).
+Release notes: [0.3.0](docs/release/v0.3.0.md); older releases live in
+[docs/release/](docs/release/).
 
 ## Documentation
 
