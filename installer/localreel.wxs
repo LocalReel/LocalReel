@@ -18,7 +18,9 @@
     <WixVariable Id="WixUILicenseRtf" Value="$(var.LicenseRtf)" />
 
     <StandardDirectory Id="LocalAppDataFolder">
-      <Directory Id="INSTALLFOLDER" Name="LocalReel" />
+      <Directory Id="INSTALLFOLDER" Name="LocalReel">
+        <Directory Id="DocsFolder" Name="docs" />
+      </Directory>
     </StandardDirectory>
 
     <StandardDirectory Id="ProgramMenuFolder">
@@ -49,9 +51,17 @@
       <Component Id="InstallTask" Directory="INSTALLFOLDER" Guid="*">
         <File Id="InstallTaskScript" Source="$(var.SourceDir)\install-task.ps1" />
       </Component>
-      <Component Id="OperationsDoc" Directory="INSTALLFOLDER" Guid="F27F12C7-8729-414C-BED2-8CB5B2266E5A">
-        <File Id="OperationsDocFile" Source="$(var.SourceDir)\docs\operations.md" />
-        <File Id="PackagingDocFile" Source="$(var.SourceDir)\docs\packaging.md" />
+      <Component Id="Docs" Directory="DocsFolder" Guid="F27F12C7-8729-414C-BED2-8CB5B2266E5A">
+        <File Id="DocInstall" Source="$(var.SourceDir)\docs\install.md" />
+        <File Id="DocOperations" Source="$(var.SourceDir)\docs\operations.md" />
+        <File Id="DocPackaging" Source="$(var.SourceDir)\docs\packaging.md" />
+        <File Id="DocArchitecture" Source="$(var.SourceDir)\docs\architecture.md" />
+        <File Id="DocBuilding" Source="$(var.SourceDir)\docs\building.md" />
+        <File Id="DocLinux" Source="$(var.SourceDir)\docs\linux.md" />
+        <File Id="DocDocker" Source="$(var.SourceDir)\docs\docker.md" />
+        <File Id="DocService" Source="$(var.SourceDir)\docs\service.md" />
+        <File Id="DocSigning" Source="$(var.SourceDir)\docs\signing.md" />
+        <File Id="DocReleaseChecklist" Source="$(var.SourceDir)\docs\release-checklist.md" />
       </Component>
     </ComponentGroup>
   </Fragment>
