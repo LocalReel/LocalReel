@@ -1,10 +1,15 @@
 # LocalReel
 
-**Local-first media server.** One binary with the web UI built in, a library on
-your own disk, and no cloud service or account. Point LocalReel at folders on
-your machine; it scans them, generates metadata and thumbnails with
-`ffmpeg`/`ffprobe`, and serves a browser UI on <http://127.0.0.1:3001> for
-browsing, playback, resume and a short-video feed.
+**A private, scrollable streaming app for your own library.** Think of a
+Douyin/Bilibili-style experience — open it, something plays, swipe to the next
+episode — except the library is your disk, not the internet. One lightweight
+binary with the web UI built in: no cloud service, no account, no ads.
+
+Point LocalReel at folders on your machine; it scans them, generates metadata and
+thumbnails with `ffmpeg`/`ffprobe`, and serves a browser UI on
+<http://127.0.0.1:3001> for the feed, series and movie playback, resume, search
+and admin. The product direction and 1.0 scope live in
+[docs/product.md](docs/product.md).
 
 This repository is the **product**: it owns the download/install entry point,
 the composition of the components, and the documentation. The server, the UI
