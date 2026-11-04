@@ -128,13 +128,34 @@ if [ -n "$FFMPEG_DIR" ]; then
   if [ -x "$FFMPEG_DIR/ffmpeg" ] && [ -x "$FFMPEG_DIR/ffprobe" ]; then
     install -m 0755 "$FFMPEG_DIR/ffmpeg" "$STAGE/ffmpeg/bin/ffmpeg"
     install -m 0755 "$FFMPEG_DIR/ffprobe" "$STAGE/ffmpeg/bin/ffprobe"
+    FFMPEG_DIST="$FFMPEG_DIR"
   elif [ -x "$FFMPEG_DIR/bin/ffmpeg" ] && [ -x "$FFMPEG_DIR/bin/ffprobe" ]; then
     install -m 0755 "$FFMPEG_DIR/bin/ffmpeg" "$STAGE/ffmpeg/bin/ffmpeg"
     install -m 0755 "$FFMPEG_DIR/bin/ffprobe" "$STAGE/ffmpeg/bin/ffprobe"
+    FFMPEG_DIST="$(dirname "$FFMPEG_DIR")"
   else
     echo "ffmpeg/ffprobe not found in $FFMPEG_DIR" >&2
     exit 1
   fi
+
+  # FFmpeg is a separate GPL/LGPL work: ship its license and a notice.
+  for name in LICENSE LICENSE.txt COPYING COPYING.GPLv3 README.txt; do
+    if [ -f "$FFMPEG_DIST/$name" ]; then
+      install -m 0644 "$FFMPEG_DIST/$name" "$STAGE/ffmpeg/$name"
+    fi
+  done
+  cat > "$STAGE/ffmpeg/NOTICE.txt" <<'EOF'
+FFmpeg is bundled with this package as a separate program.
+
+FFmpeg is licensed under the GNU General Public License (GPL) version 3, or the
+GNU Lesser General Public License (LGPL) version 2.1 or later, depending on the
+build. The license file shipped next to this notice is the one that applies.
+
+LocalReel is licensed under Apache-2.0. The two programs are aggregated in this
+package; they are not combined into one work.
+
+FFmpeg source: https://ffmpeg.org/download.html
+EOF
 fi
 
 cat > "$STAGE/README.txt" <<EOF

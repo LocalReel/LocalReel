@@ -164,9 +164,10 @@ The components are deliberately separable:
 Apache-2.0 — see [LICENSE](LICENSE). Copyright 2026 LocalReel contributors. Each
 component repository carries its own copy of the license.
 
-`ffmpeg` is **not** distributed with LocalReel. If you install your own `ffmpeg`
-build (or bundle it with `compose.ps1 -FfmpegDir`), its own license (GPL or LGPL
-depending on the build) applies.
+Releases normally do not include FFmpeg. A build can bundle it with
+`compose.ps1 -FfmpegDir`; the package then contains `ffmpeg\NOTICE.txt` and the
+license that applies to the bundled build (GPL or LGPL). If you install your own
+`ffmpeg`, its own license applies.
 
 ---
 
@@ -190,7 +191,8 @@ depending on the build) applies.
 - **管理页**：来源管理、扫描历史与问题、任务取消、缓存回收、备份与恢复。
 - **双语界面**：每页支持英文与简体中文，首次访问跟随浏览器语言，右上角小地球
   按钮切换并记住选择。
-- **本地优先**：默认只监听回环地址，单用户，无鉴权；`ffmpeg` 不随包分发。
+- **本地优先**：默认只监听回环地址，单用户，无鉴权；`ffmpeg` 默认不随包分发，
+  可用 `compose.ps1 -FfmpegDir` 打入指定版本（随包附带其许可证与 NOTICE）。
 
 安装：从 [Releases](https://github.com/LocalReel/LocalReel/releases) 下载 MSI
 或 zip。MSI 向导会让你选择安装位置（默认 `%LOCALAPPDATA%\LocalReel`，无需管理员

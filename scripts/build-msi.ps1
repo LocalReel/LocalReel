@@ -67,14 +67,45 @@ New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Output) | Out-Nul
 if (Test-Path -LiteralPath $Output) { Remove-Item -LiteralPath $Output -Force }
 
 $licenseRtf = Join-Path $root 'installer\license.rtf'
-& $wix build (Join-Path $root 'installer\localreel.wxs') `
-    -arch x64 `
-    -ext $extension `
-    -d "SourceDir=$Stage" `
-    -d "Version=$Version" `
-    -d "LicenseRtf=$licenseRtf" `
-    -o $Output
-if ($LASTEXITCODE -ne 0) { throw "wix build failed with exit $LASTEXITCODE" }
+
+# Optional ffmpeg payload: generate components only for files that were staged,
+# so a package without bundled ffmpeg still builds an empty group.
+$ffmpegWxs = Join-Path ([System.IO.Path]::GetTempPath()) ("localreel-ffmpeg-" + [guid]::NewGuid().ToString('N') + ".wxs")
+$builder = New-Object System.Text.StringBuilder
+[void]$builder.AppendLine('<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">')
+[void]$builder.AppendLine('  <Fragment>')
+[void]$builder.AppendLine('    <ComponentGroup Id="FfmpegComponents">')
+$ffmpegFiles = @(
+    @{ Id = 'FfmpegExe'; Directory = 'FfmpegBinFolder'; Path = 'ffmpeg\bin\ffmpeg.exe' },
+    @{ Id = 'FfprobeExe'; Directory = 'FfmpegBinFolder'; Path = 'ffmpeg\bin\ffprobe.exe' },
+    @{ Id = 'FfmpegNotice'; Directory = 'FfmpegFolder'; Path = 'ffmpeg\NOTICE.txt' },
+    @{ Id = 'FfmpegLicense'; Directory = 'FfmpegFolder'; Path = 'ffmpeg\LICENSE' },
+    @{ Id = 'FfmpegReadme'; Directory = 'FfmpegFolder'; Path = 'ffmpeg\README.txt' }
+)
+foreach ($file in $ffmpegFiles) {
+    if (Test-Path -LiteralPath (Join-Path $Stage $file.Path)) {
+        [void]$builder.AppendLine(
+            ('      <Component Id="{0}" Directory="{1}" Guid="*"><File Id="{0}File" Source="$(var.SourceDir)\{2}" /></Component>' -f $file.Id, $file.Directory, $file.Path)
+        )
+    }
+}
+[void]$builder.AppendLine('    </ComponentGroup>')
+[void]$builder.AppendLine('  </Fragment>')
+[void]$builder.AppendLine('</Wix>')
+[System.IO.File]::WriteAllText($ffmpegWxs, $builder.ToString(), (New-Object System.Text.UTF8Encoding($false)))
+
+try {
+    & $wix build (Join-Path $root 'installer\localreel.wxs') $ffmpegWxs `
+        -arch x64 `
+        -ext $extension `
+        -d "SourceDir=$Stage" `
+        -d "Version=$Version" `
+        -d "LicenseRtf=$licenseRtf" `
+        -o $Output
+    if ($LASTEXITCODE -ne 0) { throw "wix build failed with exit $LASTEXITCODE" }
+} finally {
+    Remove-Item -LiteralPath $ffmpegWxs -Force -ErrorAction SilentlyContinue
+}
 
 $info = Get-Item -LiteralPath $Output
 Write-Host "MSI: $($info.FullName) ($([math]::Round($info.Length / 1MB, 2)) MiB)"

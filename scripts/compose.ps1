@@ -163,10 +163,34 @@ if ($FfmpegDir) {
     } else {
         throw "ffmpeg.exe/ffprobe.exe not found in $FfmpegDir"
     }
-    $target = Join-Path $stage 'ffmpeg\bin'
+    $ffmpegRoot = Join-Path $stage 'ffmpeg'
+    $target = Join-Path $ffmpegRoot 'bin'
     New-Item -ItemType Directory -Force -Path $target | Out-Null
     Copy-Item -LiteralPath (Join-Path $source 'ffmpeg.exe') -Destination $target
     Copy-Item -LiteralPath (Join-Path $source 'ffprobe.exe') -Destination $target
+
+    # FFmpeg is a separate GPL/LGPL work: ship its license and a notice next to
+    # the binaries instead of only the executables.
+    $distribution = Split-Path -Parent $source
+    foreach ($name in @('LICENSE', 'LICENSE.txt', 'COPYING', 'COPYING.GPLv3', 'README.txt')) {
+        $candidate = Join-Path $distribution $name
+        if (Test-Path -LiteralPath $candidate) {
+            Copy-Item -LiteralPath $candidate -Destination $ffmpegRoot
+        }
+    }
+    $notice = @"
+FFmpeg is bundled with this package as a separate program.
+
+FFmpeg is licensed under the GNU General Public License (GPL) version 3, or the
+GNU Lesser General Public License (LGPL) version 2.1 or later, depending on the
+build. The license file shipped next to this notice is the one that applies.
+
+LocalReel is licensed under Apache-2.0. The two programs are aggregated in this
+package; they are not combined into one work.
+
+FFmpeg source: https://ffmpeg.org/download.html
+"@
+    Set-Content -LiteralPath (Join-Path $ffmpegRoot 'NOTICE.txt') -Value $notice -Encoding UTF8
 }
 
 $quickStart = @"

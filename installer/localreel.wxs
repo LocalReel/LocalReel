@@ -20,6 +20,9 @@
     <StandardDirectory Id="LocalAppDataFolder">
       <Directory Id="INSTALLFOLDER" Name="LocalReel">
         <Directory Id="DocsFolder" Name="docs" />
+        <Directory Id="FfmpegFolder" Name="ffmpeg">
+          <Directory Id="FfmpegBinFolder" Name="bin" />
+        </Directory>
       </Directory>
     </StandardDirectory>
 
@@ -29,6 +32,7 @@
 
     <Feature Id="MainFeature" Title="LocalReel" Level="1">
       <ComponentGroupRef Id="ProductComponents" />
+      <ComponentGroupRef Id="FfmpegComponents" />
       <ComponentRef Id="StartMenuShortcut" />
     </Feature>
   </Package>
@@ -61,7 +65,6 @@
         <File Id="DocDocker" Source="$(var.SourceDir)\docs\docker.md" />
         <File Id="DocService" Source="$(var.SourceDir)\docs\service.md" />
         <File Id="DocSigning" Source="$(var.SourceDir)\docs\signing.md" />
-        <File Id="DocReleaseChecklist" Source="$(var.SourceDir)\docs\release-checklist.md" />
       </Component>
     </ComponentGroup>
   </Fragment>
