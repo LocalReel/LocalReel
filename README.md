@@ -166,7 +166,7 @@ The components are deliberately separable:
 
 ## Status and roadmap
 
-**Current release: 0.4.0.** Windows is the primary target; Linux and Docker were
+**Current release: 0.4.1.** Windows is the primary target; Linux and Docker were
 verified under WSL2, not on bare-metal desktops of every kind. Known limitations
 (single-user, loopback-only, no HLS output, HEVC/AV1 sources need a full
 re-encode) are recorded in the release notes and the readiness report.
@@ -181,7 +181,7 @@ A public **v1.0** is blocked by two things:
 
 Details, evidence and the remaining checklist:
 [docs/release/v1.0-readiness.md](https://github.com/LocalReel/LocalReel/blob/main/docs/release/v1.0-readiness.md).
-Release notes: [0.4.0](https://github.com/LocalReel/LocalReel/blob/main/docs/release/v0.4.0.md); older releases live in [docs/release/](https://github.com/LocalReel/LocalReel/tree/main/docs/release).
+Release notes: [0.4.1](https://github.com/LocalReel/LocalReel/blob/main/docs/release/v0.4.1.md); older releases live in [docs/release/](https://github.com/LocalReel/LocalReel/tree/main/docs/release).
 
 ## Documentation
 
