@@ -52,5 +52,5 @@ status becomes `Valid`; remove it from `Cert:\CurrentUser\Root` afterwards.
 - A CA-issued code-signing certificate (OV/EV) or an internal enterprise CA.
 - Timestamping requires network access; add `-NoTimestamp` only for local
   experiments.
-- The current MSI/exe in `dist/` are **unsigned**; code signing remains a
-  v1.0 release blocker.
+- The current MSI/exe in `dist/` are **unsigned**; run this script once a
+  certificate is available.

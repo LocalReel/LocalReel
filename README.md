@@ -1,27 +1,29 @@
 # LocalReel
 
-**A private, scrollable streaming app for your own library.** Think of a
-Douyin/Bilibili-style experience — open it, something plays, swipe to the next
-episode — except the library is your disk, not the internet. One lightweight
-binary with the web UI built in: no cloud service, no account, no ads.
+**A private, scrollable streaming app for your own library.** Open it and
+something plays; swipe to the next episode; the library is your own disk, not
+the internet. One lightweight binary with the web UI built in: no cloud service,
+no account, no ads.
 
 Point LocalReel at folders on your machine; it scans them, generates metadata and
 thumbnails with `ffmpeg`/`ffprobe`, and serves a browser UI on
-<http://127.0.0.1:3001> for the feed, series and movie playback, resume, search
-and admin. The product direction and 1.0 scope live in
-[docs/product.md](docs/product.md).
+<http://127.0.0.1:3001>.
 
-This repository is the **product**: it owns the download/install entry point,
-the composition of the components, and the documentation. The server, the UI
-and the format crate are separate repositories, each independently buildable,
-testable and releasable. See [docs/architecture.md](docs/architecture.md).
+This repository is the **product**: it owns the download/install entry point, the
+composition of the components, and the documentation. The server, the UI and the
+format crate are separate repositories, each independently buildable, testable
+and releasable. See [docs/architecture.md](docs/architecture.md).
 
 ## What it does
 
 - **Library** — add local folders as sources, scan them, and browse a paginated
   library with metadata and thumbnails produced by ffmpeg.
-- **Reels** — a vertical short-video feed (`/watch`) over the same library, for
-  watching episodes in order with progress carried over.
+- **Reels** — a vertical feed (`/watch`) over the same library, ranked by the
+  server: continue-watching first, then unwatched episodes in series order, then
+  movies, then finished items.
+- **Series and episodes** — series, season and episode numbers are derived from
+  the folder layout and release-style file names; the player autoplays the next
+  episode.
 - **Resume** — playback position is stored per file on the server, so
   **Continue** picks up where you stopped; positions survive upgrades.
 - **Search and filters** — search title, filename or path; filter by
@@ -29,20 +31,23 @@ testable and releasable. See [docs/architecture.md](docs/architecture.md).
 - **Playback** — direct streaming with HTTP Range requests; H.264 files in
   MKV/MOV/TS are remuxed instead of re-encoded; other formats are transcoded to
   cached variants that can be cancelled.
+- **Mobile-first player** — swipe navigation, double-tap like, long-press on the
+  right side for 2× (release restores 1×), draggable progress bar, fullscreen for
+  landscape video, and a PWA manifest.
 - **Admin** — backup/restore, transcode/thumbnail cache GC, scan history and
   issues, source archive/remap, and a job list with cancellation.
-- **Bilingual UI** — Simplified Chinese and English on every page, with a
-  中文 / EN switch in the header. The first visit follows the browser language
-  and the choice is remembered.
+- **Bilingual UI** — English and Simplified Chinese on every page. The first
+  visit follows the browser language; a small globe button switches language and
+  the choice is remembered.
 - **Local by design** — binds loopback only by default, single user, no
   authentication layer; `ffmpeg`/`ffprobe` are not bundled and are discovered
   next to the binary or on `PATH`.
-- **Distribution** — Windows zip and per-user MSI; Linux tarball and a Docker
+- **Distribution** — Windows zip and per-user MSI; a Linux tarball and a Docker
   image are built from source on those hosts.
 
 ## Download and install
 
-Releases are published from the product repository:
+Releases are published from this repository:
 **<https://github.com/LocalReel/LocalReel/releases>**
 
 Each release carries:
@@ -55,12 +60,12 @@ Each release carries:
 
 ### Windows MSI (recommended)
 
-Run the MSI. It is **per-user** (no administrator rights) and the wizard lets
-you **choose the install directory**; the default is
-`%LOCALAPPDATA%\LocalReel`. Pick a folder you own — not `C:\Program Files`,
-which needs administrator rights. It creates a Start Menu shortcut and does not
-touch your `data\` folder or `localreel.toml`. Uninstalling removes the program
-files but **keeps your library data and configuration**.
+Run the MSI. It is **per-user** (no administrator rights) and the wizard lets you
+**choose the install directory**; the default is `%LOCALAPPDATA%\LocalReel`. Pick
+a folder you own — not `C:\Program Files`, which needs administrator rights. It
+creates a Start Menu shortcut and does not touch your `data\` folder or
+`localreel.toml`. Uninstalling removes the program files but keeps your library
+data and configuration.
 
 ```powershell
 msiexec /i localreel-<version>-x64.msi
@@ -74,8 +79,8 @@ msiexec /i localreel-<version>-x64.msi INSTALLFOLDER="D:\Apps\LocalReel" /qn
 
 ### Windows zip (portable)
 
-Extract the zip anywhere and either run `localreel.exe serve` in place, or use
-the included installer to copy it to a stable location:
+Extract the zip anywhere and either run `localreel.exe serve` in place, or use the
+included installer to copy it to a stable location:
 
 ```powershell
 # installs to %LOCALAPPDATA%\LocalReel and creates a Start Menu shortcut
@@ -86,37 +91,20 @@ the included installer to copy it to a stable location:
 ```
 
 Start LocalReel from the Start Menu (or `localreel.exe serve`) and open
-<http://127.0.0.1:3001>. Data lives in `data\` next to the binary and settings
-in `localreel.toml`; upgrades and uninstalls keep both. To start automatically
-at logon, use the included `install-task.ps1` (see [docs/service.md](docs/service.md)).
+<http://127.0.0.1:3001>. Data lives in `data\` next to the binary and settings in
+`localreel.toml`; upgrades and uninstalls keep both. To start automatically at
+logon, use the included `install-task.ps1` (see [docs/service.md](docs/service.md)).
 
-> **Unsigned builds.** The MSI and the executables are **not code-signed yet**,
-> so Windows SmartScreen will show "Windows protected your PC" for both. Verify
-> the SHA256 of what you downloaded against `SHA256SUMS.txt` before running it.
-> Code signing is a public v1.0 blocker — see
-> [docs/release/v1.0-readiness.md](https://github.com/LocalReel/LocalReel/blob/main/docs/release/v1.0-readiness.md).
-
-### 简体中文快速说明
-
-Windows 用户从 [Releases](https://github.com/LocalReel/LocalReel/releases)
-下载最新的 `localreel-<版本>-x64.msi` 或 `-x64.zip`。运行 MSI 时，安装向导会
-让你**选择安装位置**（默认 `%LOCALAPPDATA%\LocalReel`，无需管理员权限）；如果
-下载的是 zip，解压后执行 `.\install.ps1` 会装到同一默认位置，也可以用
-`.\install.ps1 -InstallDir 'D:\Apps\LocalReel'` 指定目录。安装完成后从开始菜单
-启动 LocalReel（或在该目录运行 `.\localreel.exe serve`），浏览器打开
-<http://127.0.0.1:3001>，在界面里添加媒体目录即可开始扫描。Library、Reels 和
-Admin 页面都支持中文 / English 切换。
-
-当前产物尚未代码签名，SmartScreen 会提示"未知发布者"，请先用 `SHA256SUMS.txt`
-校验下载文件的 SHA256。卸载时 `data\` 与 `localreel.toml` 默认保留，升级不会
-丢失播放进度。
+> **Unsigned builds.** The MSI and the executables are **not code-signed**, so
+> Windows SmartScreen shows "Windows protected your PC". Verify the SHA256 of
+> what you downloaded against `SHA256SUMS.txt` before running it.
 
 ### Linux
 
 The Linux tarball is built from source on a Linux host with
 `./scripts/package-linux.sh --build-web` (from this repository); extract it and
-run `./install.sh` for a per-user install in `~/.local/share/localreel`. Linux
-is a secondary target verified under WSL2; see [docs/linux.md](docs/linux.md).
+run `./install.sh` for a per-user install in `~/.local/share/localreel`. See
+[docs/linux.md](docs/linux.md).
 
 ### Docker
 
@@ -126,37 +114,36 @@ Compose file mounts your media directory read-only. See
 
 ## Build from source
 
-Building the product takes three steps; the full walkthrough is in
-[docs/building.md](docs/building.md).
+The full walkthrough is in [docs/building.md](docs/building.md).
 
 1. **Get the four repositories as siblings** — `LocalReel/` (this one),
    `localreel-core/`, `localreel-web/` and `localreel-format/`.
-2. **Develop** — the server runs from `localreel-core` with
-   `.\scripts\dev.ps1` (port 3101, data in `.dev-data/`, isolated from any
-   installed release on 3001); the UI runs from `localreel-web` with
-   `npm run dev` or builds with `npm run build`.
-3. **Compose artifacts** — from this repository, `.\scripts\compose.ps1`
-   builds the UI, embeds it into the server binary, and writes
+2. **Develop** — the server runs from `localreel-core` with `.\scripts\dev.ps1`
+   (port 3101, data in `.dev-data/`, isolated from any installed release on
+   3001); the UI runs from `localreel-web` with `npm run dev` or builds with
+   `npm run build`.
+3. **Compose artifacts** — from this repository, `.\scripts\compose.ps1` builds
+   the UI, embeds it into the server binary, and writes
    `dist/localreel-<version>-x64.zip` (add `-BuildMsi` for the MSI), then
    `.\scripts\checksums.ps1` writes `dist/SHA256SUMS.txt`.
 
 ## Repository structure
 
 LocalReel is a **multi-repository product**. Each component is its own git
-repository with its own build, tests and tag; the product repository only pins
+repository with its own build, tests and tag; the product repository pins
 versions and composes them.
 
 | Repository | Role | Produces |
 |---|---|---|
 | **LocalReel** (this repo) | Product shell: documentation, download entry point, installers, version pins | `localreel-<version>-x64.zip`, `.msi`, `SHA256SUMS.txt` |
 | [`localreel-core`](https://github.com/LocalReel/localreel-core) | Rust server: kernel + media domain + HTTP API + `localreel` binary (web UI embedded at build time) | `localreel` executable, cargo tests |
-| [`localreel-web`](https://github.com/LocalReel/localreel-web) | React + TypeScript + Vite UI: Library, Reels, Admin; zh/en | static `dist/` |
+| [`localreel-web`](https://github.com/LocalReel/localreel-web) | React + TypeScript + Vite UI: Library, Reels, Admin; English/Simplified Chinese | static `dist/` |
 | [`localreel-format`](https://github.com/LocalReel/localreel-format) | Rust crate: versioned backup/artifact formats, no I/O | crate + unit tests |
 
 The components are deliberately separable:
 
 - `localreel-core` builds and tests with `cargo` alone; the web UI is a
-  **build-time input** it embeds, not a crate dependency.
+  build-time input it embeds, not a crate dependency.
 - `localreel-web` builds to static files with `npm run build`; any static build
   that speaks `/api/v1` can be composed with the server.
 - `localreel-format` is a leaf crate with no I/O and no async runtime, so it can
@@ -164,40 +151,56 @@ The components are deliberately separable:
 - Only this repository produces installers, checksums and release notes.
   `components.json` pins exactly which component versions make up the product.
 
-## Status and roadmap
-
-**Current release: 0.4.1.** Windows is the primary target; Linux and Docker were
-verified under WSL2, not on bare-metal desktops of every kind. Known limitations
-(single-user, loopback-only, no HLS output, HEVC/AV1 sources need a full
-re-encode) are recorded in the release notes and the readiness report.
-
-A public **v1.0** is blocked by two things:
-
-1. **Code signing** — artifacts are unsigned, so SmartScreen warns and there is
-   no trusted publisher name yet.
-2. **A published release pipeline** — component repositories are tagged and the
-   product can compose a release locally, but no CI job builds, signs and
-   publishes artifacts automatically.
-
-Details, evidence and the remaining checklist:
-[docs/release/v1.0-readiness.md](https://github.com/LocalReel/LocalReel/blob/main/docs/release/v1.0-readiness.md).
-Release notes: [0.4.1](https://github.com/LocalReel/LocalReel/blob/main/docs/release/v0.4.1.md); older releases live in [docs/release/](https://github.com/LocalReel/LocalReel/tree/main/docs/release).
-
 ## Documentation
 
 - [Install guide](docs/install.md) · [Windows service](docs/service.md) ·
   [Linux](docs/linux.md) · [Docker](docs/docker.md)
-- [Architecture](docs/architecture.md) · [Building from source](docs/building.md) ·
-  [Packaging](docs/packaging.md)
-- [Signing](docs/signing.md) · [Release checklist](docs/release-checklist.md) ·
-  [v1.0 readiness](https://github.com/LocalReel/LocalReel/blob/main/docs/release/v1.0-readiness.md)
-  · [Operations](docs/operations.md)
+- [Architecture](docs/architecture.md) · [Building from source](docs/building.md)
+  · [Packaging](docs/packaging.md)
+- [Signing](docs/signing.md) · [Operations](docs/operations.md)
 
 ## License
 
-Apache-2.0 — see [LICENSE](LICENSE). Copyright 2026 LocalReel contributors.
-Each component repository carries its own copy of the license.
+Apache-2.0 — see [LICENSE](LICENSE). Copyright 2026 LocalReel contributors. Each
+component repository carries its own copy of the license.
 
-`ffmpeg` is **not** distributed with LocalReel. If you install your own
-`ffmpeg` build (or bundle it with `compose.ps1 -FfmpegDir`), its own license
-(GPL or LGPL depending on the build) applies.
+`ffmpeg` is **not** distributed with LocalReel. If you install your own `ffmpeg`
+build (or bundle it with `compose.ps1 -FfmpegDir`), its own license (GPL or LGPL
+depending on the build) applies.
+
+---
+
+## 简体中文
+
+**把你自己的硬盘变成可以像刷短视频一样刷、像流媒体网站一样追剧的私有播放器。**
+一个轻量程序内置 Web 界面，不需要云服务、账号或广告。
+
+把本地目录添加为来源后，LocalReel 会用 `ffmpeg`/`ffprobe` 扫描并生成元数据与
+缩略图，然后在 <http://127.0.0.1:3001> 提供界面。
+
+- **媒体库**：分页浏览，支持搜索、继续观看与收藏筛选，可显示已归档内容。
+- **短视频流**：竖向 feed，由服务端排序（续播优先 → 未看剧集 → 未看电影 →
+  已看完）；自动连播下一集。
+- **剧集与集数**：从目录结构与发布式文件名推导系列、季、集数。
+- **续播**：播放进度按文件保存在服务端，升级不丢。
+- **播放**：支持 HTTP Range 直连；MKV/MOV/TS 中的 H.264 用流拷贝封装；其余格式
+  转码为可取消的缓存副本。
+- **移动端播放器**：上下滑切集、双击点赞、右侧长按 2 倍速（松手恢复）、可拖动
+  进度条、横屏视频全屏观看、支持添加到主屏幕（PWA）。
+- **管理页**：来源管理、扫描历史与问题、任务取消、缓存回收、备份与恢复。
+- **双语界面**：每页支持英文与简体中文，首次访问跟随浏览器语言，右上角小地球
+  按钮切换并记住选择。
+- **本地优先**：默认只监听回环地址，单用户，无鉴权；`ffmpeg` 不随包分发。
+
+安装：从 [Releases](https://github.com/LocalReel/LocalReel/releases) 下载 MSI
+或 zip。MSI 向导会让你选择安装位置（默认 `%LOCALAPPDATA%\LocalReel`，无需管理员
+权限）；zip 解压后运行 `.\install.ps1`，也可用 `-InstallDir` 指定目录。安装后
+从开始菜单启动（或运行 `.\localreel.exe serve`），浏览器打开
+<http://127.0.0.1:3001> 添加媒体目录即可。
+
+产物未签名，SmartScreen 会提示，请先用 `SHA256SUMS.txt` 校验；卸载时 `data\` 与
+`localreel.toml` 默认保留。
+
+本仓库是产品仓库：负责下载入口、组合组件与文档。服务器、界面与格式组件分别在
+`localreel-core`、`localreel-web`、`localreel-format` 三个仓库，均可独立构建与
+测试。

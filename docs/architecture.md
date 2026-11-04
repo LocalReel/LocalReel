@@ -259,6 +259,5 @@ missing or is at the wrong version, and `-ComponentsDir` / `-CoreDir` /
 - No authentication layer: the server binds loopback only and exists for a
   single local user.
 - No cloud sync, account or telemetry service.
-- No public release pipeline yet — that, and code signing, are the v1.0
-  blockers documented in
-  [release/v1.0-readiness.md](release/v1.0-readiness.md).
+- No automated publish pipeline: releases are composed locally and uploaded by
+  hand. Artifacts are unsigned.

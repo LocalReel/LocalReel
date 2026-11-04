@@ -310,10 +310,7 @@ replacing any artifact. Only `.zip` and `.msi` files are hashed, sorted by name.
 8. **Publish.** Create the GitHub Release on
    <https://github.com/LocalReel/LocalReel/releases> for the product tag,
    upload the zip, MSI and `SHA256SUMS.txt`, and attach the release notes from
-   `docs/release/`. Note the unsigned status and known limitations.
-
-A public v1.0 also requires code signing and a published release pipeline; both
-are tracked in [release/v1.0-readiness.md](release/v1.0-readiness.md).
+   `docs/release/`. Note the unsigned status.
 
 ## Other targets
 

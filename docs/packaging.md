@@ -96,9 +96,7 @@ re-signing or repacking:
 .\scripts\checksums.ps1
 ```
 
-It writes `dist/SHA256SUMS.txt` for every `.zip`/`.msi` in `dist/`. Record the
-values for the current release in
-[docs/release/v1.0-readiness.md](release/v1.0-readiness.md).
+It writes `dist/SHA256SUMS.txt` for every `.zip`/`.msi` in `dist/`.
 
 ## Signing
 
