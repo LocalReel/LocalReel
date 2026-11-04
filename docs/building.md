@@ -12,12 +12,12 @@ built and tested on its own, and packaging always happens here — never inside
 
 | Tool | Version | Needed for |
 |---|---|---|
-| Rust (`cargo`, `rustfmt`, `clippy`) | **1.85+** (`rust-version` in the workspace) | `localreel-core`, `localreel-format` |
+| Rust (`cargo`, `rustfmt`, `clippy`) | **1.85+** (`rust-version` in the workspace) | `localreel-core` (including the format crate) |
 | Node.js + npm | **22** (same as `localreel-web` CI) | building/testing the UI |
 | PowerShell | **5.1+** (Windows PowerShell) | `scripts/*.ps1`, `localreel-core/scripts/*.ps1` |
 | WiX Toolset CLI | **5.0.2** + `WixToolset.UI.wixext` | MSI only |
 | .NET SDK | 6+ (for `dotnet tool`) | installing WiX |
-| Git | any recent version | cloning the four repositories |
+| Git | any recent version | cloning the repositories |
 | ffmpeg / ffprobe | optional | runtime scan/thumbnail/transcode; optionally bundled into the package |
 
 Install the Rust components if needed:
@@ -47,18 +47,17 @@ discovery order).
 
 ## Repository layout
 
-Clone the four repositories as **siblings**:
+Clone the repositories as **siblings**:
 
 ```text
 <workspace>/
   LocalReel/          the product (this repository): docs, installers, compose
-  localreel-core/     Rust: kernel + media + API + localreel binary
+  localreel-core/     Rust: kernel + media + API + format crate + localreel binary
   localreel-web/      React + TypeScript + Vite UI
-  localreel-format/   Rust: versioned backup/artifact formats
 ```
 
-`components.json` declares `../localreel-core`, `../localreel-web` and
-`../localreel-format`; `scripts/compose.ps1` resolves those relative to this
+`components.json` declares `../localreel-core` and `../localreel-web`;
+`scripts/compose.ps1` resolves those relative to this
 repository. Non-sibling layouts work too:
 
 ```powershell
@@ -169,9 +168,6 @@ cd localreel-core
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
-
-cd ..\localreel-format
-cargo test
 
 cd ..\localreel-web
 npm test
@@ -288,13 +284,13 @@ replacing any artifact. Only `.zip` and `.msi` files are hashed, sorted by name.
 ## Release flow
 
 1. **Bump versions.** Update the Rust workspace version
-   (`localreel-core/Cargo.toml`), `localreel-web/package.json` (and
-   `package-lock.json`), and the pins in `components.json`. Bump
-   `localreel-format` only if it changed.
+   (`localreel-core/Cargo.toml`, which also covers the format crate),
+   `localreel-web/package.json` (and `package-lock.json`), and the pins in
+   `components.json`.
 2. **Verify.** Run the quality gates on each component; green `cargo
    fmt`/`clippy`/`test`, `npm test`/`npm run build`, and a clean working tree.
-3. **Tag.** Tag each component repository `v<version>` (e.g. `v0.3.0`; format
-   stays at its own tag until it changes) and tag this repository `v<version>`.
+3. **Tag.** Tag each component repository `v<version>` and tag this repository
+   `v<version>`.
 4. **Compose.** From this repository: `.\scripts\compose.ps1 -BuildMsi`
    (add `-FfmpegDir` if the release bundles ffmpeg).
 5. **Checksums.** `.\scripts\checksums.ps1` — record the values; publish

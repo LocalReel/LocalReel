@@ -1,7 +1,7 @@
 # Packaging the product
 
 This repository is the only place that produces distributable artifacts. The
-components (`localreel-core`, `localreel-web`, `localreel-format`) never build
+components (`localreel-core`, `localreel-web`) never build
 installers or release zips; they are consumed here.
 
 ## Composition contract
@@ -9,8 +9,8 @@ installers or release zips; they are consumed here.
 `components.json` pins which component versions belong to the product:
 
 ```json
-{ "core": { "path": "../localreel-core", "version": "0.3.0" },
-  "web":  { "path": "../localreel-web",  "version": "0.3.0" } }
+{ "core": { "path": "../localreel-core", "version": "0.4.1" },
+  "web":  { "path": "../localreel-web",  "version": "0.4.1" } }
 ```
 
 `scripts/compose.ps1` resolves the checkouts (by `path`, by sibling directory,
@@ -109,5 +109,5 @@ re-create the zip so the archive contains the signed exe.
 |---|---|
 | server code, tests, dev server | `localreel-core` |
 | UI source and its build | `localreel-web` |
-| data formats | `localreel-format` |
+| data formats | `localreel-core/crates/localreel-format` |
 | composition, installers, docs, releases | this repository |

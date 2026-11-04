@@ -14,12 +14,6 @@
       "path": "../localreel-web",
       "version": "0.4.1",
       "provides": "React UI static build (dist/) embedded by the core binary"
-    },
-    "format": {
-      "repository": "https://github.com/LocalReel/localreel-format.git",
-      "path": "../localreel-format",
-      "version": "0.1.0",
-      "provides": "versioned backup/artifact format crate"
     }
   }
 }

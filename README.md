@@ -116,8 +116,8 @@ Compose file mounts your media directory read-only. See
 
 The full walkthrough is in [docs/building.md](docs/building.md).
 
-1. **Get the four repositories as siblings** — `LocalReel/` (this one),
-   `localreel-core/`, `localreel-web/` and `localreel-format/`.
+1. **Get the repositories as siblings** — `LocalReel/` (this one),
+   `localreel-core/` and `localreel-web/`.
 2. **Develop** — the server runs from `localreel-core` with `.\scripts\dev.ps1`
    (port 3101, data in `.dev-data/`, isolated from any installed release on
    3001); the UI runs from `localreel-web` with `npm run dev` or builds with
@@ -136,9 +136,8 @@ versions and composes them.
 | Repository | Role | Produces |
 |---|---|---|
 | **LocalReel** (this repo) | Product shell: documentation, download entry point, installers, version pins | `localreel-<version>-x64.zip`, `.msi`, `SHA256SUMS.txt` |
-| [`localreel-core`](https://github.com/LocalReel/localreel-core) | Rust server: kernel + media domain + HTTP API + `localreel` binary (web UI embedded at build time) | `localreel` executable, cargo tests |
+| [`localreel-core`](https://github.com/LocalReel/localreel-core) | Rust server: kernel + media domain + HTTP API + `localreel` binary (web UI embedded at build time); owns the `localreel-format` crate | `localreel` executable, cargo tests |
 | [`localreel-web`](https://github.com/LocalReel/localreel-web) | React + TypeScript + Vite UI: Library, Reels, Admin; English/Simplified Chinese | static `dist/` |
-| [`localreel-format`](https://github.com/LocalReel/localreel-format) | Rust crate: versioned backup/artifact formats, no I/O | crate + unit tests |
 
 The components are deliberately separable:
 
@@ -146,8 +145,9 @@ The components are deliberately separable:
   build-time input it embeds, not a crate dependency.
 - `localreel-web` builds to static files with `npm run build`; any static build
   that speaks `/api/v1` can be composed with the server.
-- `localreel-format` is a leaf crate with no I/O and no async runtime, so it can
-  be tested in isolation.
+- `crates/localreel-format` (inside `localreel-core`) is a leaf crate with no I/O
+  and no async runtime, so the shared backup/artifact schema is tested in
+  isolation.
 - Only this repository produces installers, checksums and release notes.
   `components.json` pins exactly which component versions make up the product.
 
@@ -201,6 +201,6 @@ depending on the build) applies.
 产物未签名，SmartScreen 会提示，请先用 `SHA256SUMS.txt` 校验；卸载时 `data\` 与
 `localreel.toml` 默认保留。
 
-本仓库是产品仓库：负责下载入口、组合组件与文档。服务器、界面与格式组件分别在
-`localreel-core`、`localreel-web`、`localreel-format` 三个仓库，均可独立构建与
-测试。
+本仓库是产品仓库：负责下载入口、组合组件与文档。服务器与界面分别在
+`localreel-core`、`localreel-web` 两个仓库，均可独立构建与测试；共享的
+备份/产物格式定义在 `localreel-core/crates/localreel-format`。

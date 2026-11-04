@@ -26,9 +26,8 @@ LocalReel/ (this repository - product shell)
                 ▼
    localreel-web ──dist/──▶ localreel-core ──▶ localreel.exe ──▶ zip / MSI
    (React + TS)            (Rust workspace,          (UI embedded)
-                            kernel/media/api/server)
-                │
-                └── localreel-format (independent versioned-schema crate)
+                            kernel/media/api/server
+                            + format crate)
 ```
 
 The dependency direction is one-way — the web UI talks to the server's HTTP
@@ -95,10 +94,10 @@ npm run test:browser  # headless Chrome + mock API + fixture (needs Chrome/Chrom
 Deliverable: a plain static `dist/` directory. No server code, no knowledge of
 Rust, no assumption that it is embedded.
 
-### `localreel-format` — versioned data formats (Rust crate)
+### `localreel-format` — versioned data formats (workspace crate)
 
-A leaf crate that defines the versioned shapes LocalReel reads and writes, and
-nothing else:
+A leaf crate (`localreel-core/crates/localreel-format`) that defines the
+versioned shapes LocalReel reads and writes, and nothing else:
 
 - `Backup` — portable sources + playback state export (`version = 2`);
 - `ArtifactKind` / `artifact_file_name` — deterministic, filesystem-safe names
@@ -110,11 +109,11 @@ network or spawn processes; reading and writing is the consumer's job. The
 format is versioned from day one, and unknown/newer versions must be rejected
 rather than reinterpreted.
 
-**Builds and tests independently:**
+**Builds and tests with the workspace:**
 
 ```powershell
-cd localreel-format
-cargo test
+cd localreel-core
+cargo test -p localreel-format
 ```
 
 ### `LocalReel` — the product repository
@@ -164,11 +163,10 @@ a specific binary.
 ```json
 {
   "product": "LocalReel",
-  "version": "0.3.0",
+  "version": "0.4.1",
   "components": {
-    "core":   { "path": "../localreel-core",   "version": "0.3.0", "...": "..." },
-    "web":    { "path": "../localreel-web",    "version": "0.3.0", "...": "..." },
-    "format": { "path": "../localreel-format", "version": "0.1.0", "...": "..." }
+    "core": { "path": "../localreel-core", "version": "0.4.1", "...": "..." },
+    "web":  { "path": "../localreel-web",  "version": "0.4.1", "...": "..." }
   }
 }
 ```
@@ -240,10 +238,11 @@ missing or is at the wrong version, and `-ComponentsDir` / `-CoreDir` /
 
 ## Versioning and compatibility
 
-- **Product version** — this repository's tag (`v0.3.0`) plus the pins in
+- **Product version** — this repository's tag (`v0.4.1`) plus the pins in
   `components.json`.
 - **Component versions** — each component repository tags its own releases
-  (`localreel-core`/`localreel-web` `v0.3.0`, `localreel-format` `v0.1.0`).
+  (`localreel-core` and `localreel-web` `v0.4.1`). The format crate shares the
+  core workspace version.
 - **API contract** — `/api/v1` between the UI and the server; the UI and the
   server are versioned together in a product release.
 - **Backup format** — strictly versioned in `localreel-format`; an unknown
