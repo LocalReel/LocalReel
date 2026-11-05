@@ -125,6 +125,18 @@ Full DB backup: stop the server first, then copy `data/localreel.db` (and
 `-wal`/`-shm` if present). Restoring an old DB is a rollback of both schema and
 state; back up the current DB first.
 
+## Streaming and validators
+
+`GET /api/v1/media/{id}/stream` (and `HEAD`) serves stored bytes with
+`Accept-Ranges: bytes`, a weak `ETag` (`W/"<size>-<mtime>"`) and
+`Last-Modified`.
+
+- `If-None-Match` and `If-Modified-Since` revalidate and return `304`.
+- `Range` resumes or seeks; single ranges are capped at 8 MiB per response.
+- `If-Range` accepts the ETag or the `Last-Modified` date. A stale validator
+  makes the server ignore `Range` and return the full file with `200`.
+- Unsatisfiable ranges return `416` with `Content-Range: bytes */<size>`.
+
 ## HLS playback
 
 Source media can also be packaged as an HLS VOD playlist and served to clients
