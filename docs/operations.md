@@ -125,6 +125,30 @@ Full DB backup: stop the server first, then copy `data/localreel.db` (and
 `-wal`/`-shm` if present). Restoring an old DB is a rollback of both schema and
 state; back up the current DB first.
 
+## HLS playback
+
+Source media can also be packaged as an HLS VOD playlist and served to clients
+that play HLS natively (Safari, VLC, mobile players). The web UI keeps using
+direct play and MP4 transcodes.
+
+```bash
+# First call: 202 with a job id while ffmpeg packages the playlist
+curl -X POST "http://127.0.0.1:3001/api/v1/media/42/playback?format=hls"
+# {"mode":"preparing","job_id":"...","message":"hls packaging started"}
+
+# Once the job succeeds: 200 with a ready URL
+curl -X POST "http://127.0.0.1:3001/api/v1/media/42/playback?format=hls"
+# {"mode":"ready","url":"/hls/<media-uid>/index.m3u8"}
+```
+
+In the web player, the **HLS** button switches playback to this mode; browsers
+without native HLS support load `hls.js` on demand.
+
+The playlist and segments are plain files under `data/hls` (`media.hls_dir`),
+served with `application/vnd.apple.mpegurl` and `video/mp2t`. Segments are four
+seconds by default and use H.264/AAC. The cache GC job removes HLS packages that
+have not been used for `cache_max_age_hours`.
+
 ## Upgrade
 
 1. Export a backup and copy `data/localreel.db` while stopped.
