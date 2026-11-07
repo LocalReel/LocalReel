@@ -69,7 +69,7 @@ if [ -z "$VERSION" ]; then
   VERSION="$(awk '
     /^\[workspace.package\]/ { in_section=1; next }
     /^\[/ { in_section=0 }
-    in_section && $1 == "version" { gsub(/"/, "", $3); print $3; exit }
+    in_section && $1 == "version" { gsub(/"|\r/, "", $3); print $3; exit }
   ' "$CORE_DIR/Cargo.toml")"
 fi
 if [ -z "$VERSION" ]; then

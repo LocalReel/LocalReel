@@ -65,7 +65,29 @@ container sets that flag so it can serve through a published port. The in-app
 loopback guard is therefore disabled inside the container, and **the host-side
 port mapping is the security boundary**. Keep Compose's
 `127.0.0.1:3001:3001`; if you publish `3001:3001` on all interfaces, anyone who
-can reach the host can use LocalReel. There is no authentication in v1.
+can reach the host can reach the sign-in page. The first run inside the
+container asks for the owner account; every request needs a session after that,
+but the traffic is plain HTTP, so put a reverse proxy in front of it for HTTPS
+(see [reverse-proxy.md](reverse-proxy.md)).
+
+## Multi-arch (amd64 + arm64)
+
+Half of the NAS fleet is ARM. The image builds for both architectures from one
+command; QEMU makes the foreign-architecture Rust build possible, so expect the
+first build to be slow (the Rust compile is emulated):
+
+```bash
+docker buildx create --use --name localreel   # once
+docker buildx build \
+  --build-context web=../localreel-web \
+  --platform linux/amd64,linux/arm64 \
+  --tag localreel:dev \
+  .                                             # add --push to publish
+```
+
+`docker buildx imagetools inspect localreel:dev` lists both manifests. The
+release workflow (`.github/workflows/release.yml`) builds the same two
+architectures and pushes `ghcr.io/localreel/localreel:<version>` and `:latest`.
 
 ## Data and backup
 

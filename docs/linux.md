@@ -10,7 +10,8 @@ Two packages are produced from the product repository:
 | Artifact | For | Contains |
 |---|---|---|
 | `localreel-<version>-x86_64.tar.gz` | manual installs | binary, docs, `install.sh` / `uninstall.sh` |
-| `localreel_<version>_amd64.deb` | Debian/Ubuntu servers | `/usr/bin/localreel`, systemd unit, docs |
+| `localreel_<version>_amd64.deb` | Debian/Ubuntu servers and desktops | `/usr/bin/localreel`, systemd unit, desktop entry, docs |
+| `localreel-<version>-x86_64.AppImage` | desktops without install rights | one executable file |
 
 ## Build a tarball
 
@@ -71,6 +72,21 @@ Data lives in `/var/lib/localreel`, logs in `/var/log/localreel` (and in the
 journal). The service unit sets `LOCALREEL_MODE=server`, so it never tries to
 open a browser. The desktop entry is the opposite case: it runs in a terminal
 window so stopping it is `Ctrl+C`.
+
+## Build an AppImage
+
+For a desktop machine without a package manager step:
+
+```bash
+./scripts/package-appimage.sh --build-web
+chmod +x dist/localreel-<version>-x86_64.AppImage
+./dist/localreel-<version>-x86_64.AppImage
+```
+
+The script downloads `appimagetool` once into `dist/.tools/` and waves the same
+binary and desktop entry as the `.deb` into a single file. On a machine without
+FUSE (containers, some WSL builds) run it with
+`--appimage-extract-and-run` — the script uses the same flag for the tool.
 
 ## Install from the tarball
 
