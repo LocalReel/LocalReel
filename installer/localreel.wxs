@@ -29,7 +29,7 @@
     <CustomAction
         Id="LaunchLocalReel"
         FileRef="LocalReelExe"
-        ExeCommand=""
+        ExeCommand="serve --mode desktop --tray"
         Execute="immediate"
         Impersonate="yes"
         Return="asyncNoWait" />
