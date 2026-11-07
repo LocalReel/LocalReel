@@ -88,6 +88,10 @@ jobs:
           dotnet tool install --global wix --version 5.0.2
           wix extension add --global WixToolset.UI.wixext/5.0.2
 
+      - name: Install web dependencies
+        working-directory: localreel-web
+        run: npm ci
+
       - name: Compose zip + MSI
         shell: pwsh
         run: ./product/scripts/compose.ps1 -ComponentsDir "$PWD" -BuildMsi -Force
@@ -143,17 +147,17 @@ jobs:
         with:
           workspaces: localreel-core
 
-      - name: Build web UI
+      - name: Install web dependencies
         working-directory: localreel-web
-        run: |
-          npm ci
-          npm run build
+        run: npm ci
 
-      - name: Tarball + .deb
+      - name: Tarball (also builds the web UI and the binary)
         working-directory: product
-        run: |
-          ./scripts/package-linux.sh --skip-build
-          ./scripts/package-deb.sh --skip-build
+        run: ./scripts/package-linux.sh --build-web
+
+      - name: .deb
+        working-directory: product
+        run: ./scripts/package-deb.sh --skip-build
 
       - name: AppImage
         working-directory: product
@@ -212,6 +216,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: localreel-core
+
+      - name: Install web dependencies
+        working-directory: localreel-web
+        run: npm ci
 
       - name: Build .app and .dmg
         working-directory: product
@@ -284,15 +292,13 @@ jobs:
         with:
           workspaces: localreel-core
 
-      - name: Build web UI
+      - name: Install web dependencies
         working-directory: localreel-web
-        run: |
-          npm ci
-          npm run build
+        run: npm ci
 
-      - name: Build the package
+      - name: Build the package (also builds the web UI and the binary)
         working-directory: product
-        run: ./scripts/package-spk.sh --skip-build --arch x86_64
+        run: ./scripts/package-spk.sh --build-web --arch x86_64
 
       - name: Validate the layout
         run: |
