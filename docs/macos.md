@@ -64,6 +64,14 @@ cp /Volumes/LocalReel*/com.localreel.server.plist ~/Library/LaunchAgents/
 launchctl load ~/Library/LaunchAgents/com.localreel.server.plist
 ```
 
+The same file can be written by the binary, without copying from the volume:
+
+```bash
+/Applications/LocalReel.app/Contents/MacOS/localreel autostart enable
+/Applications/LocalReel.app/Contents/MacOS/localreel autostart status
+/Applications/LocalReel.app/Contents/MacOS/localreel autostart disable
+```
+
 Stop or remove it:
 
 ```bash

@@ -125,6 +125,19 @@ systemctl --user daemon-reload
 systemctl --user enable --now localreel
 ```
 
+On a desktop session without systemd user units, the same switch exists in the
+binary:
+
+```bash
+localreel autostart enable    # ~/.config/autostart/localreel.desktop
+localreel autostart status
+localreel autostart disable
+```
+
+It writes the server persona (`serve --mode server --no-open`) with
+`Terminal=false`: nothing pops up at login, and the process is stopped from the
+web UI (Admin → Server → Shut down server).
+
 ## Uninstall
 
 ```bash

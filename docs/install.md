@@ -108,6 +108,22 @@ Override with `LOCALREEL_DATA_DIR`, `LOCALREEL_LOG_DIR`, `LOCALREEL_CONFIG`,
 
 ## Start at login (optional)
 
+The built-in command needs no administrator rights and no script:
+
+```powershell
+.\localreel.exe autostart enable    # HKCU\Software\Microsoft\Windows\CurrentVersion\Run
+.\localreel.exe autostart status
+.\localreel.exe autostart disable
+```
+
+It registers `"<install>\localreel.exe" serve --mode desktop --tray --no-open`,
+so at login the tray icon appears and no browser is taken over. A console window
+flashes for a moment before the tray hides it; a scheduled task avoids the flash
+but needs administrator rights, which is why this is the default.
+
+For the headless alternative, `install-task.ps1` registers a Task Scheduler
+entry that runs the server persona at logon (no console at all):
+
 ```powershell
 .\install-task.ps1            # runs `localreel.exe serve` at logon
 .\install-task.ps1 -StartNow  # register and start immediately
@@ -121,7 +137,7 @@ See [service.md](service.md).
 Every release ships `SHA256SUMS.txt`:
 
 ```powershell
-Get-FileHash .\localreel-0.3.0-x64.zip -Algorithm SHA256
+Get-FileHash .\localreel-0.4.2-x64.zip -Algorithm SHA256
 ```
 
 ## Other platforms

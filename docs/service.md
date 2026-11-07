@@ -1,8 +1,13 @@
 # Run LocalReel automatically (Windows)
 
 The installer creates Start Menu and desktop shortcuts that start the app with
-a tray icon, and does not register anything that runs by itself. Two supported
+a tray icon, and does not register anything that runs by itself. Three supported
 options for starting it automatically:
+
+- `localreel autostart enable` — per-user Run key, desktop persona with the
+  tray, no administrator rights (documented in [install.md](install.md));
+- a Task Scheduler entry, headless server persona (Option A below);
+- a Startup-folder shortcut (Option B below).
 
 ## Option A — Task Scheduler (recommended)
 
