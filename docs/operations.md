@@ -265,6 +265,43 @@ Behaviour:
 - HLS packaging keeps the file's default audio track; switch to a track and the
   player falls back to MP4 playback instead of HLS.
 
+## Metadata and posters
+
+External metadata is optional and **off by default**. With `provider = "none"`
+nothing is fetched, the library uses filenames and thumbnails, and the server
+never opens an outbound connection on its own.
+
+```toml
+[metadata]
+provider = "tmdb"      # or "none" (default)
+api_key = "…"          # TMDB v3 API key
+language = "zh-CN"     # TMDB language for titles and overviews
+```
+
+`LOCALREEL_METADATA_PROVIDER`, `LOCALREEL_TMDB_API_KEY` and
+`LOCALREEL_METADATA_LANGUAGE` override them. `tmdb` without a key degrades to
+`none` and the server says so; it never fails to start over a missing key.
+
+How a match works:
+
+- The `probe_media` job queues `metadata_match` for an item whose metadata is
+  older than seven days (or absent), so a scan does not hammer the provider.
+- The title comes from the series grouping for episodes, otherwise from the
+  filename with release tags stripped
+  (`The.Matrix.1999.1080p.BluRay.x264-GROUP.mkv` → `The Matrix`, 1999).
+- A candidate must clear a **confidence threshold**; a wrong poster is worse
+  than no poster, so fuzzy matches are discarded rather than guessed.
+- Posters land in `data/cache/posters` and are served at `/posters/<file>`;
+  `GET /api/v1/media/{id}` gains `metadata` and `poster_url` when a match
+  exists. The player shows the poster and the overview.
+- Every failure — provider down, no match, poster download — is a warning. The
+  library is never worse for having a provider configured.
+
+Admin → Metadata shows the active provider and a **Match metadata** button that
+queues stale items (`POST /api/v1/metadata/match`, optionally `{"source_id": 3}`).
+The API key lives in the configuration file, deliberately: the UI has no write
+access to it, and a container may mount it read-only.
+
 ## Progress-bar previews
 
 Long videos get a small sprite sheet so the progress bar can show a thumbnail
