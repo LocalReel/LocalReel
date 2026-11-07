@@ -6,7 +6,7 @@ LocalReel is a single binary with the web UI embedded. It binds
 Get the artifacts from the
 [releases page](https://github.com/LocalReel/LocalReel/releases). The artifacts
 are **unsigned**, so Windows SmartScreen may ask for confirmation
-("More info" → "Run anyway").
+("More info" 鈫?"Run anyway").
 
 ## Requirements
 
@@ -43,15 +43,14 @@ off. `localreel doctor` reports the level:
 `full` / `probe-only` / `missing`, and the Admin page shows the same status.
 Adding `ffmpeg.exe` next to `ffprobe.exe` later needs no reconfiguration.
 
-Upstream ships one archive, so `-Profile probe` does not shrink the download —
-it shrinks what is installed and removes the encoder dependency.
+Upstream ships one archive, so `-Profile probe` does not shrink the download 鈥?it shrinks what is installed and removes the encoder dependency.
 
-## Option A — MSI (recommended)
+## Option A 鈥?MSI (recommended)
 
 1. Download `localreel-<version>-x64.msi`.
 2. Double-click it. The wizard asks where to install:
    - default: `%LOCALAPPDATA%\LocalReel` (per-user, no administrator rights);
-   - or **Browse…** to pick any folder you own, e.g. `D:\Apps\LocalReel`.
+   - or **Browse鈥?* to pick any folder you own, e.g. `D:\Apps\LocalReel`.
 3. Finish the wizard. A Start Menu shortcut and a desktop shortcut named
    *LocalReel* are created; both run `localreel-desktop.exe`, a GUI-subsystem
    launcher that starts the server without showing a console window.
@@ -59,13 +58,13 @@ it shrinks what is installed and removes the encoder dependency.
 Unattended installs can pass the folder explicitly:
 
 ```powershell
-msiexec /i localreel-0.4.2-x64.msi INSTALLFOLDER="D:\Apps\LocalReel" /qn
+msiexec /i localreel-0.5.0-x64.msi INSTALLFOLDER="D:\Apps\LocalReel" /qn
 ```
 
 Because the package is per-user, do not pick a location that needs
 administrator rights (such as `C:\Program Files`).
 
-## Option B — portable zip
+## Option B 鈥?portable zip
 
 ```powershell
 # extract the zip, then from inside it:
@@ -85,15 +84,14 @@ Without `-InstallDir` it installs to `%LOCALAPPDATA%\LocalReel` and writes an
    itself. Right-click the tray icon to **open the UI** or **quit**.
 2. Create the **owner account**: a username and a password of at least eight
    characters. This account manages the household.
-3. Open **Admin → Add a folder**, paste a path (`D:\Media`, `/volume1/media`, a
+3. Open **Admin 鈫?Add a folder**, paste a path (`D:\Media`, `/volume1/media`, a
    mounted share) and press **Add and scan**. Scanning is a background job:
    metadata and thumbnails arrive progressively and the progress is visible in
    Admin.
 4. Playback is direct for MP4 (H.264/AAC). H.264 files in MKV/MOV/TS/FLV/AVI
    are remuxed into MP4 in seconds; other codecs are re-encoded (slow).
 
-**Stopping it.** Right-click the tray icon → **Quit**, or open **Admin →
-Server → Shut down server** (the path that works without a tray, e.g. on
+**Stopping it.** Right-click the tray icon 鈫?**Quit**, or open **Admin 鈫?Server 鈫?Shut down server** (the path that works without a tray, e.g. on
 Linux and macOS). When you start the server from a terminal, `--tray` hides
 nothing: the console stays, because the console belongs to your terminal, and
 `Ctrl+C` still stops it.
@@ -110,7 +108,7 @@ used.
 
 ## Accounts
 
-The owner can create one viewer account per person under **Admin → Accounts**.
+The owner can create one viewer account per person under **Admin 鈫?Accounts**.
 The library is shared; progress, likes and favourites are per account.
 Disabling an account ends its sessions immediately, and resetting a password
 signs that account out everywhere.
@@ -169,7 +167,7 @@ See [service.md](service.md).
 Every release ships `SHA256SUMS.txt`:
 
 ```powershell
-Get-FileHash .\localreel-0.4.2-x64.zip -Algorithm SHA256
+Get-FileHash .\localreel-0.5.0-x64.zip -Algorithm SHA256
 ```
 
 ## Other platforms
@@ -177,3 +175,4 @@ Get-FileHash .\localreel-0.4.2-x64.zip -Algorithm SHA256
 - Linux: [linux.md](linux.md)
 - Docker: [docker.md](docker.md) (the image recipe lives in the core component)
 - Operations and troubleshooting: [operations.md](operations.md)
+
