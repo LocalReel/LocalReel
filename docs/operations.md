@@ -117,6 +117,33 @@ If ffmpeg is missing, the server still starts and the API/UI work; scans add
 rows but metadata/playback preparation fails until it is installed. Run
 `tools\verify-ffmpeg.ps1` to check an install.
 
+### Hardware acceleration
+
+```toml
+[media]
+hwaccel = "auto"   # default; or none, nvenc, qsv, vaapi, videotoolbox
+```
+
+`LOCALREEL_HWACCEL` overrides it. The encoder table (`ffmpeg -encoders`) is read
+once at startup and the resolved choice is logged and shown by
+`localreel doctor` as `hwaccel: nvenc (preferred: auto)`, and by
+`GET /api/v1/admin/health` as `"hwaccel"`.
+
+- `auto` picks the first encoder this build reports on this platform: NVENC,
+  then QSV, then VAAPI on Linux; VideoToolbox on macOS. A requested encoder that
+  is not installed falls back to the CPU rather than failing.
+- Each encoder keeps its own quality flags — `-cq 23 -preset p5` for NVENC,
+  `-global_quality 23` for QSV, `-qp 23` plus `format=nv12,hwupload` on the
+  render node for VAAPI, `-q:v 65` for VideoToolbox. `-crf` and
+  `-preset veryfast` belong to libx264 and are not passed.
+- If ffmpeg fails with a device error (`No capable devices`, `Cannot load`,
+  `Invalid device`, an impossible format conversion) the job retries once on the
+  CPU and reports
+  `transcode ready (hardware encoder failed, retried on CPU)`. A corrupt input is
+  not retried — that would fail twice and hide the real reason.
+- HLS packaging still encodes with libx264; only MP4 transcodes use the
+  accelerator.
+
 ## Backup and restore
 
 Application backup (portable, versioned JSON) is the primary state backup:
