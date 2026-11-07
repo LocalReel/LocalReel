@@ -51,9 +51,55 @@ The scan job discovers files; probe/thumbnail jobs follow automatically.
   `.\localreel.exe serve 2>> localreel.log`
 - `RUST_LOG=info` (default) / `RUST_LOG=debug` changes verbosity.
 - `GET /api/v1/health`: status, version, DB, ffmpeg, media count.
-- `GET /api/v1/admin/health`: paths, recent jobs, DB/ffmpeg, cache.
+- `GET /api/v1/admin/health`: paths, recent jobs, DB/ffmpeg, cache, watchers.
 - `GET /api/v1/admin/cache`: transcode/thumbnail bytes and counts.
 - `GET /api/v1/scan-runs`, `/scan-issues`: scan history and failures.
+
+### Error details
+
+Error bodies carry a stable `code` and a `message`. An optional `detail` field
+holds diagnostics — a library path, an ffmpeg stderr tail — and is only
+serialized for an **administrator** whose request comes from loopback, or for any
+administrator when `RUST_LOG=debug`. A viewer never receives it, so a shared
+NAS deployment does not leak the library layout.
+
+The UI shows the detail behind a collapsed **Details** element. The job history
+and the server log always keep the full text.
+
+## Automatic rescans
+
+Enabled local sources are watched; dropping a file into a library folder
+triggers an incremental scan within a few seconds, with no button to press.
+
+- Each source gets one recursive OS watcher
+  (`ReadDirectoryChangesW` on Windows, `inotify` on Linux, `FSEvents` on macOS).
+  Events are debounced for two seconds, so copying a season produces one scan,
+  not one per file.
+- The job is the same `scan_source` job the Admin button queues, with the same
+  `scan:<id>` dedupe key: a manual scan and a filesystem change cannot run two
+  competing scans.
+- Hidden files, `~$` lock files, `.tmp`/`.part`/`.crdownload` partials and
+  NAS metadata directories (`@eaDir`, `#recycle`) are ignored.
+
+Configuration:
+
+```toml
+[scan]
+watch = true        # default
+```
+
+`LOCALREEL_WATCH=0` disables watching without editing the config file.
+
+Watching is best effort. `GET /api/v1/admin/health` reports
+`"watchers": {"enabled": true, "active": 2, "skipped": []}`; the Admin page
+shows the same as an **Auto watch** statistic. A source that cannot be watched
+is listed under `skipped` (for example `webdav:https://nas/dav` for a plugin
+source, or `local:D:\media (the platform refused to watch it: ...)`), the server
+logs a warning, and everything else keeps working. Network shares that do not
+forward filesystem events (SMB/NFS without inotify support) fall into this
+group; use the manual scan for those, or enable watching on the machine that
+hosts the files.
+
 
 ## ffmpeg
 
@@ -212,6 +258,8 @@ There are no down migrations. Roll back by restoring the DB and the old binary.
 | `source is archived` on scan | Restore it in Admin or `PATCH /sources/{id} {"archived":false}` |
 | Cache keeps growing | Check `jobs.cache_gc_interval_secs`, run Admin → Run GC, inspect `/admin/cache` |
 | DB locked | Ensure only one server process; check `-wal`/`-shm`; do not run two writers |
+| A file dropped into a folder is not detected | `GET /admin/health` → `watchers.skipped`. SMB/NFS shares often forward no events: scan manually, or watch on the machine that hosts the files |
+| An error shows only "media operation failed" | The detail is admin-only. Sign in as the owner from the server machine, or set `RUST_LOG=debug`, then open **Details** under the message or read the job's `error` |
 
 ## Security
 
