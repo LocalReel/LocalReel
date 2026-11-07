@@ -48,8 +48,11 @@ and releasable. See [docs/architecture.md](docs/architecture.md).
 - **Local by design** — binds loopback only by default and requires a signed-in
   account; `ffmpeg`/`ffprobe` are not bundled and are discovered next to the
   binary or on `PATH`.
-- **Distribution** — Windows zip and per-user MSI; a Linux tarball and a Docker
-  image are built from source on those hosts.
+- **Desktop launch** — a double-click starts the server, opens the browser and
+  leaves a tray icon to reopen the UI or quit; from a terminal the console stays
+  and Ctrl+C works.
+- **Distribution** — Windows zip and per-user MSI; a .deb with the systemd unit,
+  a Linux tarball and a Docker image are built from source on those hosts.
 
 ## Download and install
 

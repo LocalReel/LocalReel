@@ -1,7 +1,8 @@
 # Run LocalReel automatically (Windows)
 
-The installer creates Start Menu and desktop shortcuts but does not start a
-background service. Two supported options:
+The installer creates Start Menu and desktop shortcuts that start the app with
+a tray icon, and does not register anything that runs by itself. Two supported
+options for starting it automatically:
 
 ## Option A — Task Scheduler (recommended)
 

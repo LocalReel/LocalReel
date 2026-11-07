@@ -21,13 +21,13 @@ are **unsigned**, so Windows SmartScreen may ask for confirmation
 2. Double-click it. The wizard asks where to install:
    - default: `%LOCALAPPDATA%\LocalReel` (per-user, no administrator rights);
    - or **Browse…** to pick any folder you own, e.g. `D:\Apps\LocalReel`.
-3. Finish the wizard. A Start Menu shortcut named *LocalReel* is created; it
-   starts the server (`localreel.exe serve`) in the install folder.
+3. Finish the wizard. A Start Menu shortcut and a desktop shortcut named
+   *LocalReel* are created; they start the app in the install folder.
 
 Unattended installs can pass the folder explicitly:
 
 ```powershell
-msiexec /i localreel-0.3.0-x64.msi INSTALLFOLDER="D:\Apps\LocalReel" /qn
+msiexec /i localreel-0.4.2-x64.msi INSTALLFOLDER="D:\Apps\LocalReel" /qn
 ```
 
 Because the package is per-user, do not pick a location that needs
@@ -47,9 +47,10 @@ Without `-InstallDir` it installs to `%LOCALAPPDATA%\LocalReel` and writes an
 
 ## First run
 
-1. Start LocalReel from the Start Menu, or tick **Launch LocalReel** on the last
-   wizard page. A console window opens and the browser follows at
-   <http://127.0.0.1:3001>.
+1. Start LocalReel from the Start Menu, the desktop shortcut, or tick **Launch
+   LocalReel** on the last wizard page. The app starts with a **tray icon**, the
+   browser follows at <http://127.0.0.1:3001>, and the console window hides
+   itself. Right-click the tray icon to **open the UI** or **quit**.
 2. Create the **owner account**: a username and a password of at least eight
    characters. This account manages the household.
 3. Open **Admin → Add a folder**, paste a path (`D:\Media`, `/volume1/media`, a
@@ -59,9 +60,19 @@ Without `-InstallDir` it installs to `%LOCALAPPDATA%\LocalReel` and writes an
 4. Playback is direct for MP4 (H.264/AAC). H.264 files in MKV/MOV/TS/FLV/AVI
    are remuxed into MP4 in seconds; other codecs are re-encoded (slow).
 
-The console window must stay open: closing it stops the server. Starting
-LocalReel again while it runs just reopens the UI. If another program holds the
-port, the server moves to the next free one and prints the address it used.
+**Stopping it.** Right-click the tray icon → **Quit**. When you start the server
+from a terminal, `--tray` hides nothing: the console stays, because the console
+belongs to your terminal, and `Ctrl+C` still stops it.
+
+```powershell
+.\localreel.exe serve              # console only, Ctrl+C to stop
+.\localreel.exe serve --tray       # tray icon; hides the console when it owns one
+.\localreel.exe serve --no-open    # do not open the browser
+```
+
+Starting LocalReel again while it runs just reopens the UI. If another program
+holds the port, the server moves to the next free one and prints the address it
+used.
 
 ## Accounts
 
