@@ -265,6 +265,34 @@ Behaviour:
 - HLS packaging keeps the file's default audio track; switch to a track and the
   player falls back to MP4 playback instead of HLS.
 
+## Progress-bar previews
+
+Long videos get a small sprite sheet so the progress bar can show a thumbnail
+while it is dragged.
+
+- A `preview_sprite` job renders one image: a 10x10 grid of 160 px wide tiles,
+  sampled every `duration / 100` seconds (never less than one second), so a
+  two-hour film and a twenty-minute episode both produce one image of the same
+  size. It is registered as a `sprite` variant and lives in `data/previews`.
+- `GET /api/v1/media/{id}/preview.vtt` renders the WebVTT that maps each time
+  range to a rectangle (`#xywh`) in `/previews/<uid>.jpg`. A file without a
+  sprite answers `404`, which the player treats as "no preview" rather than as
+  an error.
+- Only files longer than `preview_min_secs` (600 s by default) are processed:
+  a short clip gains nothing from a preview and the render still costs a
+  process launch.
+
+```toml
+[media]
+preview_sprites = true     # false disables the whole feature
+preview_min_secs = 600
+previews_dir = "D:/LocalReel/previews"
+```
+
+`LOCALREEL_PREVIEW_SPRITES`, `LOCALREEL_PREVIEW_MIN_SECS` and
+`LOCALREEL_PREVIEW_DIR` override them. Sprites are cache: the cache GC removes
+them with the other variants.
+
 ## Transcode budget
 
 Every encode — an MP4 transcode or an HLS package — draws from one process-wide
