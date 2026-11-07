@@ -207,6 +207,39 @@ served with `application/vnd.apple.mpegurl` and `video/mp2t`. Segments are four
 seconds by default and use H.264/AAC. The cache GC job removes HLS packages that
 have not been used for `cache_max_age_hours`.
 
+## Transcode budget
+
+Every encode — an MP4 transcode or an HLS package — draws from one process-wide
+budget. Without it, "two people press play at once" means two ffmpeg processes
+fighting over one NAS CPU.
+
+```toml
+[media]
+max_concurrent_transcodes = 2   # default
+idle_session_secs = 900         # default: 15 minutes
+```
+
+`LOCALREEL_MAX_CONCURRENT_TRANSCODES` and `LOCALREEL_IDLE_SESSION_SECS`
+override them. A value of `1` serialises all encoding; `0` is rejected.
+
+Behaviour:
+
+- Jobs that cannot get a slot stay **queued** with
+  `message: "waiting for a transcode slot"`; they never occupy a worker thread.
+  A saturated budget does not block scans, probes or thumbnails — the worker
+  skips the saturated kinds and takes other work first.
+- `GET /api/v1/admin/health` reports
+  `"transcodes": {"running": 1, "queued": 3, "limit": 2, "sessions": 1}` and the
+  Admin page shows the same as a **Transcode slots** statistic. The job list
+  shows what is waiting.
+- A playback session is refreshed by every `/playback`, `/stream` and `/hls/…`
+  request. After `idle_session_secs` with no request the session is dropped and
+  the encode it was waiting on is cancelled. Finished cache files are **not**
+  deleted here — that is the cache GC's job.
+- On Linux, if free memory is below `max(200 MB, 5 %)` a new encode is refused
+  with `503` and `{"error":{"code":"busy",…}}` instead of pushing the machine
+  into swap. Other platforms skip the check.
+
 ## Upgrade
 
 1. Export a backup and copy `data/localreel.db` while stopped.
