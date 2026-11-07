@@ -234,6 +234,37 @@ served with `application/vnd.apple.mpegurl` and `video/mp2t`. Segments are four
 seconds by default and use H.264/AAC. The cache GC job removes HLS packages that
 have not been used for `cache_max_age_hours`.
 
+## Multiple audio tracks
+
+A file may carry several audio tracks (a Japanese and an English dub, a
+commentary, a stereo and a 5.1 mix). They are discovered by the `probe_media`
+job and stored in `media_tracks`; a re-probe replaces them wholesale, so a track
+that left the container leaves the menu too.
+
+```bash
+# what the player offers
+curl "http://127.0.0.1:3001/api/v1/media/42/tracks"
+# [{"id":7,"kind":"audio","language":"ja","channels":6,"is_default":true,...}]
+
+# play with a specific track
+curl -X POST "http://127.0.0.1:3001/api/v1/media/42/playback?audio=8"
+```
+
+Behaviour:
+
+- Track languages are normalized (`chi`/`zho`/`zh-CN` → `zh`, `zh-TW` →
+  `zh-Hant`, `eng` → `en`) so the UI can compare them.
+- When the container marks no default, the first audio track is the default.
+- Choosing the default track leaves direct play alone: the browser plays the file
+  as it is. Choosing any other track answers `202 preparing` and starts a
+  remux/transcode, because a browser cannot switch embedded audio on a file it
+  is playing. The player shows the same "preparing" state as any other transcode.
+- The audio choice is part of the transcode cache key
+  (`h264_aac_a2`), so two viewers watching different languages get two files and
+  neither overwrites the other.
+- HLS packaging keeps the file's default audio track; switch to a track and the
+  player falls back to MP4 playback instead of HLS.
+
 ## Transcode budget
 
 Every encode — an MP4 transcode or an HLS package — draws from one process-wide
