@@ -135,6 +135,16 @@ if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -F
 New-Item -ItemType Directory -Path $stage | Out-Null
 
 Copy-Item -LiteralPath $binary -Destination (Join-Path $stage $exeName)
+
+# The GUI launcher is what the shortcuts and the login entry run: it starts the
+# server without a console window. It is Windows-only.
+if ($exeName -eq 'localreel.exe') {
+    $launcher = Join-Path $core "target\$Profile\localreel-desktop.exe"
+    if (-not (Test-Path -LiteralPath $launcher)) {
+        throw "launcher not found: $launcher (cargo build should produce it)"
+    }
+    Copy-Item -LiteralPath $launcher -Destination (Join-Path $stage 'localreel-desktop.exe')
+}
 Copy-Item -LiteralPath (Join-Path $core 'localreel.toml.example') -Destination $stage
 Copy-Item -LiteralPath (Join-Path $root 'LICENSE') -Destination $stage
 Copy-Item -LiteralPath (Join-Path $root 'README.md') -Destination $stage

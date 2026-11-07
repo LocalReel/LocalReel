@@ -149,6 +149,27 @@ web UI (Admin → Server → Shut down server).
 The `.deb` removes the program and the unit; `/var/lib/localreel` and
 `/var/log/localreel` are kept.
 
+## Synology (experimental)
+
+`scripts/package-spk.sh --arch x86_64` builds `localreel-<version>-spk-x86_64.spk`
+for DSM 7. It has **not** been installed on a real NAS: the archive is built
+from the documented layout and checked structurally in CI (INFO fields,
+`package.tgz` containing `bin/localreel`, a `start-stop-status` script and
+`conf/privilege`), nothing more. Treat it as a starting point and open an issue
+if Package Center rejects it.
+
+The package:
+
+- extracts to `/var/packages/localreel/target` and keeps data in
+  `/var/packages/localreel/var`, so upgrades keep the library and accounts;
+- runs as the package user, binds port 3001 and shows up in Package Center with
+  a link to the UI;
+- starts and stops through `scripts/start-stop-status`, which the Package
+  Center uses for the Run/Stop buttons.
+
+Install from **Package Center → Settings → General → Trust Level** with
+third-party packages allowed, then upload the `.spk` by hand.
+
 ## Verify (when a Linux machine is available)
 
 ```bash

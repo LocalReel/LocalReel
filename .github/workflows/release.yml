@@ -4,9 +4,8 @@ name: release
 #
 # The product repository is the only place that produces artifacts, so this is
 # the only release workflow. It expects a token that can read the component
-# repositories (the default GITHUB_TOKEN cannot): create a repository secret
-# named COMPONENTS_TOKEN with `contents: read` on localreel-core, localreel-web
-# and localreel-format.
+# repositories (the default GITHUB_TOKEN can read them too while they are
+# public; set COMPONENTS_TOKEN to keep working if they go private).
 
 on:
   push:
@@ -14,7 +13,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Version to build (defaults to the tag or Cargo.toml)
+        description: Version to build (defaults to components.json)
         required: false
 
 permissions:
@@ -52,24 +51,24 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
   windows:
-    name: windows (${{ needs.version.outputs.version }})
+    name: windows
     needs: version
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
         with:
           repository: ${{ env.ORG }}/LocalReel
-          token: ${{ secrets.COMPONENTS_TOKEN }}
+          token: ${{ secrets.COMPONENTS_TOKEN || github.token }}
           path: product
       - uses: actions/checkout@v4
         with:
           repository: ${{ env.ORG }}/localreel-core
-          token: ${{ secrets.COMPONENTS_TOKEN }}
+          token: ${{ secrets.COMPONENTS_TOKEN || github.token }}
           path: localreel-core
       - uses: actions/checkout@v4
         with:
           repository: ${{ env.ORG }}/localreel-web
-          token: ${{ secrets.COMPONENTS_TOKEN }}
+          token: ${{ secrets.COMPONENTS_TOKEN || github.token }}
           path: localreel-web
 
       - uses: actions/setup-node@v4
@@ -91,8 +90,19 @@ jobs:
 
       - name: Compose zip + MSI
         shell: pwsh
+        run: ./product/scripts/compose.ps1 -ComponentsDir "$PWD" -BuildMsi -Force
+
+      - name: Smoke test the launcher
+        shell: pwsh
         run: |
-          ./product/scripts/compose.ps1 -ComponentsDir "$PWD" -BuildMsi -Force
+          $stage = Get-ChildItem product/dist -Directory -Filter 'localreel-*' | Select-Object -First 1
+          if (-not $stage) { throw 'no staged package' }
+          $launcher = Join-Path $stage.FullName 'localreel-desktop.exe'
+          if (-not (Test-Path $launcher)) { throw 'launcher missing from the package' }
+          $exe = Join-Path $stage.FullName 'localreel.exe'
+          if (-not (Test-Path $exe)) { throw 'server missing from the package' }
+          $version = & $exe --version
+          Write-Host "$version / launcher $( (Get-Item $launcher).Length ) bytes"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -103,24 +113,24 @@ jobs:
           if-no-files-found: error
 
   linux:
-    name: linux (${{ needs.version.outputs.version }})
+    name: linux
     needs: version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           repository: ${{ env.ORG }}/LocalReel
-          token: ${{ secrets.COMPONENTS_TOKEN }}
+          token: ${{ secrets.COMPONENTS_TOKEN || github.token }}
           path: product
       - uses: actions/checkout@v4
         with:
           repository: ${{ env.ORG }}/localreel-core
-          token: ${{ secrets.COMPONENTS_TOKEN }}
+          token: ${{ secrets.COMPONENTS_TOKEN || github.token }}
           path: localreel-core
       - uses: actions/checkout@v4
         with:
           repository: ${{ env.ORG }}/localreel-web
-          token: ${{ secrets.COMPONENTS_TOKEN }}
+          token: ${{ secrets.COMPONENTS_TOKEN || github.token }}
           path: localreel-web
 
       - uses: actions/setup-node@v4
@@ -151,14 +161,16 @@ jobs:
         # accept --appimage-extract-and-run.
         run: ./scripts/package-appimage.sh --skip-build
 
-      - name: Smoke test the .deb payload
+      - name: Smoke test the artifacts
         run: |
           set -euo pipefail
           deb="$(ls -1 product/dist/localreel_*_amd64.deb | tail -1)"
           dpkg-deb -x "$deb" /tmp/deb
           /tmp/deb/usr/bin/localreel --version
-          /tmp/deb/usr/bin/localreel doctor | grep -q "web:       embedded"
+          LOCALREEL_DATA_DIR=/tmp/lr-data /tmp/deb/usr/bin/localreel doctor | grep -q "web:       embedded"
           dpkg-deb --info "$deb" | grep -q "Package: localreel"
+          appimage="$(ls -1 product/dist/*.AppImage | tail -1)"
+          "$appimage" --appimage-extract-and-run --version
 
       - uses: actions/upload-artifact@v4
         with:
@@ -170,35 +182,195 @@ jobs:
             product/dist/*.AppImage
           if-no-files-found: error
 
+  macos:
+    name: macos
+    needs: version
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.ORG }}/LocalReel
+          token: ${{ secrets.COMPONENTS_TOKEN || github.token }}
+          path: product
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.ORG }}/localreel-core
+          token: ${{ secrets.COMPONENTS_TOKEN || github.token }}
+          path: localreel-core
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.ORG }}/localreel-web
+          token: ${{ secrets.COMPONENTS_TOKEN || github.token }}
+          path: localreel-web
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: localreel-web/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: localreel-core
+
+      - name: Build .app and .dmg
+        working-directory: product
+        run: ./scripts/package-macos.sh --build-web
+
+      - name: Smoke test the bundle
+        run: |
+          set -euo pipefail
+          app="product/dist/LocalReel.app"
+          test -x "$app/Contents/MacOS/localreel"
+          "$app/Contents/MacOS/localreel" --version
+          LOCALREEL_DATA_DIR="$RUNNER_TEMP/lr-data" "$app/Contents/MacOS/localreel" doctor \
+            | grep -q "web:       embedded"
+          codesign -dv --verbose=2 "$app" 2>&1 | grep -q "Signature=adhoc"
+          dmg="$(ls -1 product/dist/*.dmg | tail -1)"
+          hdiutil imageinfo "$dmg" >/dev/null
+
+      - name: Serve, sign in and stop through the API
+        run: |
+          set -euo pipefail
+          exe="product/dist/LocalReel.app/Contents/MacOS/localreel"
+          export LOCALREEL_DATA_DIR="$RUNNER_TEMP/lr-live" LOCALREEL_PORT=3911
+          "$exe" serve --mode server --no-open >/dev/null 2>&1 &
+          server=$!
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3911/api/v1/health >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:3911/api/v1/health
+          status="$(curl -fsS http://127.0.0.1:3911/api/v1/auth/status)"
+          echo "$status"
+          echo "$status" | grep -q '"setup_required":true'
+          kill "$server"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: |
+            product/dist/*.dmg
+          if-no-files-found: error
+
+  spk:
+    name: synology package (experimental)
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.ORG }}/LocalReel
+          token: ${{ secrets.COMPONENTS_TOKEN || github.token }}
+          path: product
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.ORG }}/localreel-core
+          token: ${{ secrets.COMPONENTS_TOKEN || github.token }}
+          path: localreel-core
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.ORG }}/localreel-web
+          token: ${{ secrets.COMPONENTS_TOKEN || github.token }}
+          path: localreel-web
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: localreel-web/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: localreel-core
+
+      - name: Build web UI
+        working-directory: localreel-web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build the package
+        working-directory: product
+        run: ./scripts/package-spk.sh --skip-build --arch x86_64
+
+      - name: Validate the layout
+        run: |
+          set -euo pipefail
+          spk="$(ls -1 product/dist/*.spk | tail -1)"
+          entries="$(tar -tf "$spk")"
+          for required in INFO package.tgz scripts/start-stop-status conf/privilege; do
+            echo "$entries" | grep -qx "$required" || { echo "missing $required"; exit 1; }
+          done
+          rm -rf /tmp/spk && mkdir -p /tmp/spk
+          tar -xf "$spk" -C /tmp/spk INFO package.tgz scripts conf
+          grep -q '^package="localreel"' /tmp/spk/INFO
+          grep -q '^adminport="3001"' /tmp/spk/INFO
+          grep -q '^arch=".*x86_64.*"' /tmp/spk/INFO
+          tar -tzf /tmp/spk/package.tgz | grep -qx './bin/localreel'
+          for script in /tmp/spk/scripts/*; do sh -n "$script"; done
+          python3 -c "import json;json.load(open('/tmp/spk/conf/privilege'));print('privilege json ok')"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: synology
+          path: product/dist/*.spk
+          if-no-files-found: error
+
   docker:
-    name: docker (multi-arch)
+    name: docker
     needs: version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           repository: ${{ env.ORG }}/localreel-core
-          token: ${{ secrets.COMPONENTS_TOKEN }}
+          token: ${{ secrets.COMPONENTS_TOKEN || github.token }}
           path: localreel-core
       - uses: actions/checkout@v4
         with:
           repository: ${{ env.ORG }}/localreel-web
-          token: ${{ secrets.COMPONENTS_TOKEN }}
+          token: ${{ secrets.COMPONENTS_TOKEN || github.token }}
           path: localreel-web
 
-      # arm64 NAS boxes are half the target fleet, so the image is built for
-      # both architectures; QEMU makes the arm64 compile possible on an amd64
-      # runner.
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
 
+      - name: Build amd64 and smoke test it
+        working-directory: localreel-core
+        run: |
+          set -euo pipefail
+          docker buildx build \
+            --build-context web=../localreel-web \
+            --platform linux/amd64 \
+            --load \
+            -t localreel:test \
+            .
+          docker run -d --name lr \
+            -p 127.0.0.1:3001:3001 \
+            -e LOCALREEL_DATA_DIR=/data \
+            localreel:test
+          ok=0
+          for _ in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3001/api/v1/health; then ok=1; break; fi
+            sleep 2
+          done
+          if [ "$ok" -ne 1 ]; then docker logs lr; docker rm -f lr; exit 1; fi
+          curl -fsS http://127.0.0.1:3001/api/v1/auth/status | grep -q '"setup_required":true'
+          curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3001/api/v1/media | grep -qx '401'
+          docker rm -f lr
+
       - uses: docker/login-action@v3
+        if: startsWith(github.ref, 'refs/tags/v')
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push
+      # arm64 NAS boxes are half the target fleet; the same image is built for
+      # both architectures with QEMU. Only a tag publishes it.
+      - name: Build and push multi-arch
+        if: startsWith(github.ref, 'refs/tags/v')
         working-directory: localreel-core
         run: |
           set -euo pipefail
@@ -216,7 +388,8 @@ jobs:
 
   release:
     name: publish
-    needs: [version, windows, linux]
+    needs: [version, windows, linux, macos, spk]
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -225,7 +398,7 @@ jobs:
       - name: Checksums
         run: |
           set -euo pipefail
-          find artifacts -type f \( -name '*.zip' -o -name '*.msi' -o -name '*.tar.gz' -o -name '*.deb' -o -name '*.AppImage' \) \
+          find artifacts -type f \( -name '*.zip' -o -name '*.msi' -o -name '*.tar.gz' -o -name '*.deb' -o -name '*.AppImage' -o -name '*.dmg' -o -name '*.spk' \) \
             -exec cp {} . \;
           sha256sum * > SHA256SUMS.txt
           cat SHA256SUMS.txt
@@ -238,5 +411,7 @@ jobs:
             *.tar.gz
             *.deb
             *.AppImage
+            *.dmg
+            *.spk
             SHA256SUMS.txt
           fail_on_unmatched_files: false

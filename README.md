@@ -51,8 +51,9 @@ and releasable. See [docs/architecture.md](docs/architecture.md).
 - **Desktop launch** — a double-click starts the server, opens the browser and
   leaves a tray icon to reopen the UI or quit; from a terminal the console stays
   and Ctrl+C works. Where there is no tray, **Admin → Server** stops the process.
-- **Distribution** — Windows zip and per-user MSI; a .deb with the systemd unit,
-  a Linux tarball and a Docker image are built from source on those hosts.
+- **Distribution** — Windows zip and per-user MSI; .deb with the systemd unit,
+  AppImage and tarball; macOS .dmg; Docker image; and an experimental Synology
+  .spk. The release workflow builds them on the matching GitHub runners.
 
 ## Download and install
 

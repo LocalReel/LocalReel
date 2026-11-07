@@ -95,21 +95,26 @@ try {
     }
     Write-Host "Installed: $version -> $InstallDir"
 
+    # The GUI launcher starts the server without a console window; fall back to
+    # the console binary when a package does not ship it.
+    $launcher = Join-Path $InstallDir 'localreel-desktop.exe'
+    $shortcutTarget = if (Test-Path -LiteralPath $launcher) { $launcher } else { $installedExe }
+
     $shortcuts = @()
     if (-not $NoShortcuts) {
         $startMenu = Join-Path $StartMenuDir 'LocalReel.lnk'
-        New-Shortcut -Path $startMenu -Target $installedExe -WorkingDirectory $InstallDir -Arguments 'serve'
+        New-Shortcut -Path $startMenu -Target $shortcutTarget -WorkingDirectory $InstallDir -Arguments ''
         $shortcuts += $startMenu
 
         if ($DesktopShortcut) {
             $desktop = Join-Path $DesktopDir 'LocalReel.lnk'
-            New-Shortcut -Path $desktop -Target $installedExe -WorkingDirectory $InstallDir -Arguments 'serve'
+            New-Shortcut -Path $desktop -Target $shortcutTarget -WorkingDirectory $InstallDir -Arguments ''
             $shortcuts += $desktop
         }
 
         if ($StartOnLogin) {
             $startup = Join-Path $StartupDir 'LocalReel.lnk'
-            New-Shortcut -Path $startup -Target $installedExe -WorkingDirectory $InstallDir -Arguments 'serve'
+            New-Shortcut -Path $startup -Target $shortcutTarget -WorkingDirectory $InstallDir -Arguments ''
             $shortcuts += $startup
         }
     }

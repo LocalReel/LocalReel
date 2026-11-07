@@ -29,7 +29,7 @@
     <CustomAction
         Id="LaunchLocalReel"
         FileRef="LocalReelExe"
-        ExeCommand="serve --mode desktop --tray"
+        ExeCommand=""
         Execute="immediate"
         Impersonate="yes"
         Return="asyncNoWait" />
@@ -72,6 +72,10 @@
       <Component Id="MainExecutable" Directory="INSTALLFOLDER" Guid="D45E80F3-863B-4AC1-8976-39E288EFC6E3">
         <File Id="LocalReelExe" Source="$(var.SourceDir)\localreel.exe" KeyPath="yes" />
       </Component>
+      <!-- GUI-subsystem launcher: the shortcuts use it so no console flashes. -->
+      <Component Id="DesktopLauncher" Directory="INSTALLFOLDER" Guid="*">
+        <File Id="DesktopLauncherExe" Source="$(var.SourceDir)\localreel-desktop.exe" />
+      </Component>
       <Component Id="ConfigExample" Directory="INSTALLFOLDER" Guid="*">
         <File Id="ConfigExampleFile" Source="$(var.SourceDir)\localreel.toml.example" />
       </Component>
@@ -105,10 +109,10 @@
           Id="StartMenuShortcut"
           Name="LocalReel"
           Description="Local-first media server"
-          Target="[INSTALLFOLDER]localreel.exe"
+          Target="[INSTALLFOLDER]localreel-desktop.exe"
           WorkingDirectory="INSTALLFOLDER"
           Icon="LocalReelIcon"
-          Arguments="serve --tray" />
+          />
       <RemoveFolder Id="RemoveApplicationProgramsFolder" On="uninstall" />
       <RegistryValue Root="HKCU" Key="Software\LocalReel" Name="installed" Type="integer" Value="1" KeyPath="yes" />
     </Component>
@@ -120,10 +124,10 @@
           Id="DesktopShortcut"
           Name="LocalReel"
           Description="Local-first media server"
-          Target="[INSTALLFOLDER]localreel.exe"
+          Target="[INSTALLFOLDER]localreel-desktop.exe"
           WorkingDirectory="INSTALLFOLDER"
           Icon="LocalReelIcon"
-          Arguments="serve --tray" />
+          />
       <RegistryValue Root="HKCU" Key="Software\LocalReel" Name="desktopShortcut" Type="integer" Value="1" KeyPath="yes" />
     </Component>
   </Fragment>

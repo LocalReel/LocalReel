@@ -22,7 +22,8 @@ are **unsigned**, so Windows SmartScreen may ask for confirmation
    - default: `%LOCALAPPDATA%\LocalReel` (per-user, no administrator rights);
    - or **Browse…** to pick any folder you own, e.g. `D:\Apps\LocalReel`.
 3. Finish the wizard. A Start Menu shortcut and a desktop shortcut named
-   *LocalReel* are created; they start the app in the install folder.
+   *LocalReel* are created; both run `localreel-desktop.exe`, a GUI-subsystem
+   launcher that starts the server without showing a console window.
 
 Unattended installs can pass the folder explicitly:
 
