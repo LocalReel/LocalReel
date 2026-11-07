@@ -47,25 +47,43 @@ Without `-InstallDir` it installs to `%LOCALAPPDATA%\LocalReel` and writes an
 
 ## First run
 
-1. Start LocalReel (Start Menu, or `localreel.exe serve` in the install folder).
-2. Open <http://127.0.0.1:3001>.
-3. Open **Admin → Sources**, add your media folder, and run a scan. Scanning is
-   a background job: metadata and thumbnails arrive progressively and the
-   progress is visible in Admin.
+1. Start LocalReel from the Start Menu, or tick **Launch LocalReel** on the last
+   wizard page. A console window opens and the browser follows at
+   <http://127.0.0.1:3001>.
+2. Create the **owner account**: a username and a password of at least eight
+   characters. This account manages the household.
+3. Open **Admin → Add a folder**, paste a path (`D:\Media`, `/volume1/media`, a
+   mounted share) and press **Add and scan**. Scanning is a background job:
+   metadata and thumbnails arrive progressively and the progress is visible in
+   Admin.
 4. Playback is direct for MP4 (H.264/AAC). H.264 files in MKV/MOV/TS/FLV/AVI
    are remuxed into MP4 in seconds; other codecs are re-encoded (slow).
+
+The console window must stay open: closing it stops the server. Starting
+LocalReel again while it runs just reopens the UI. If another program holds the
+port, the server moves to the next free one and prints the address it used.
+
+## Accounts
+
+The owner can create one viewer account per person under **Admin → Accounts**.
+The library is shared; progress, likes and favourites are per account.
+Disabling an account ends its sessions immediately, and resetting a password
+signs that account out everywhere.
 
 ## Where things live
 
 | What | Location |
 |---|---|
 | Program | the folder chosen during install |
-| Data (database, thumbnails, transcodes) | `data\` inside that folder |
-| Config | `localreel.toml` inside that folder (optional; env overrides win) |
-| Logs | the terminal / scheduled-task output |
+| Data (database, thumbnails, transcodes, HLS cache) | `%LOCALAPPDATA%\LocalReel` |
+| Config | `%APPDATA%\LocalReel\localreel.toml` (optional) |
+| Logs | `%LOCALAPPDATA%\LocalReel\logs\localreel.log` |
 
-Override with `LOCALREEL_DATA_DIR`, `LOCALREEL_CONFIG`, `LOCALREEL_PORT`,
-`LOCALREEL_HOST` when you need a different layout.
+Program and data are deliberately separate: upgrading, uninstalling or moving
+the program never touches the library or the accounts.
+
+Override with `LOCALREEL_DATA_DIR`, `LOCALREEL_LOG_DIR`, `LOCALREEL_CONFIG`,
+`LOCALREEL_PORT`, `LOCALREEL_HOST` when you need a different layout.
 
 ## Upgrade and uninstall
 

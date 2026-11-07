@@ -73,7 +73,8 @@ kept strictly apart from an installed release (port 3001).
 
 ### `localreel-web` — React + TypeScript + Vite UI
 
-Pages: Library (`/`), Reels (`/watch`), Admin (`/admin`). The UI talks to the
+Pages: Library (`/`), Reels (`/watch`), Admin (`/admin`), plus a first-run
+setup / sign-in gate in front of all three. The UI talks to the
 server only through `/api/v1` over relative same-origin URLs, so the same build
 works behind the embedded server, a reverse proxy or a Docker container.
 
@@ -255,8 +256,8 @@ missing or is at the wrong version, and `-ComponentsDir` / `-CoreDir` /
 
 - No plugin/WASM runtime in v1; extension seams are traits inside the kernel.
 - No remote/NAS/S3 media backends; sources are local paths.
-- No authentication layer: the server binds loopback only and exists for a
-  single local user.
+- No external identity provider: accounts, sessions and password hashes live in
+  the local database, and the server still binds loopback only by default.
 - No cloud sync, account or telemetry service.
 - No automated publish pipeline: releases are composed locally and uploaded by
   hand. Artifacts are unsigned.

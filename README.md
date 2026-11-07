@@ -24,24 +24,30 @@ and releasable. See [docs/architecture.md](docs/architecture.md).
 - **Series and episodes** — series, season and episode numbers are derived from
   the folder layout and release-style file names; the player autoplays the next
   episode.
-- **Resume** — playback position is stored per file on the server, so
-  **Continue** picks up where you stopped; positions survive upgrades.
+- **Resume** — playback position is stored on the server for the signed-in
+  account, so **Continue** picks up where you stopped; positions survive
+  upgrades and stay separate for each account.
 - **Search and filters** — search title, filename or path; filter by
   **Continue** or **Favorites**; archived media can be shown on demand.
+- **Accounts** — the first run asks for the owner account; the owner creates a
+  viewer account per person, and everyone gets their own progress, likes and
+  favourites. The owner can disable accounts and reset passwords from the
+  admin page.
 - **Playback** — direct streaming with HTTP Range requests; H.264 files in
   MKV/MOV/TS are remuxed instead of re-encoded; other formats are transcoded to
   cached variants that can be cancelled.
 - **Mobile-first player** — swipe navigation, double-tap like, long-press on the
   right side for 2× (release restores 1×), draggable progress bar, fullscreen for
   landscape video, and a PWA manifest.
-- **Admin** — backup/restore, transcode/thumbnail cache GC, scan history and
-  issues, source archive/remap, and a job list with cancellation.
+- **Admin** — add folders, create and manage accounts, backup/restore,
+  transcode/thumbnail cache GC, scan history and issues, source archive/remap,
+  and a job list with cancellation.
 - **Bilingual UI** — English and Simplified Chinese on every page. The first
   visit follows the browser language; a small globe button switches language and
   the choice is remembered.
-- **Local by design** — binds loopback only by default, single user, no
-  authentication layer; `ffmpeg`/`ffprobe` are not bundled and are discovered
-  next to the binary or on `PATH`.
+- **Local by design** — binds loopback only by default and requires a signed-in
+  account; `ffmpeg`/`ffprobe` are not bundled and are discovered next to the
+  binary or on `PATH`.
 - **Distribution** — Windows zip and per-user MSI; a Linux tarball and a Docker
   image are built from source on those hosts.
 
@@ -183,25 +189,32 @@ license that applies to the bundled build (GPL or LGPL). If you install your own
 - **短视频流**：竖向 feed，由服务端排序（续播优先 → 未看剧集 → 未看电影 →
   已看完）；自动连播下一集。
 - **剧集与集数**：从目录结构与发布式文件名推导系列、季、集数。
-- **续播**：播放进度按文件保存在服务端，升级不丢。
+- **续播**：播放进度按账户保存在服务端，升级不丢，不同账户互不影响。
+- **账户**：首次运行创建所有者账户；所有者可为每个人创建观看者账户，各自拥有
+  独立的进度、喜欢与收藏，也可在管理页停用账户或重置密码。
 - **播放**：支持 HTTP Range 直连；MKV/MOV/TS 中的 H.264 用流拷贝封装；其余格式
   转码为可取消的缓存副本。
 - **移动端播放器**：上下滑切集、双击点赞、右侧长按 2 倍速（松手恢复）、可拖动
   进度条、横屏视频全屏观看、支持添加到主屏幕（PWA）。
-- **管理页**：来源管理、扫描历史与问题、任务取消、缓存回收、备份与恢复。
+- **管理页**：添加媒体目录、账户管理、扫描历史与问题、任务取消、缓存回收、
+  备份与恢复。
 - **双语界面**：每页支持英文与简体中文，首次访问跟随浏览器语言，右上角小地球
   按钮切换并记住选择。
-- **本地优先**：默认只监听回环地址，单用户，无鉴权；`ffmpeg` 默认不随包分发，
+- **本地优先**：默认只监听回环地址，且需要登录账户；`ffmpeg` 默认不随包分发，
   可用 `compose.ps1 -FfmpegDir` 打入指定版本（随包附带其许可证与 NOTICE）。
 
 安装：从 [Releases](https://github.com/LocalReel/LocalReel/releases) 下载 MSI
 或 zip。MSI 向导会让你选择安装位置（默认 `%LOCALAPPDATA%\LocalReel`，无需管理员
-权限）；zip 解压后运行 `.\install.ps1`，也可用 `-InstallDir` 指定目录。安装后
-从开始菜单启动（或运行 `.\localreel.exe serve`），浏览器打开
-<http://127.0.0.1:3001> 添加媒体目录即可。
+权限），装完勾选「Launch LocalReel」即可直接进入界面；zip 解压后运行
+`.\install.ps1`，也可用 `-InstallDir` 指定目录。从开始菜单启动时会自动打开浏览器
+（<http://127.0.0.1:3001>）。
 
-产物未签名，SmartScreen 会提示，请先用 `SHA256SUMS.txt` 校验；卸载时 `data\` 与
-`localreel.toml` 默认保留。
+数据存放在 `%LOCALAPPDATA%\LocalReel`（数据库、缩略图、转码缓存）与
+`%APPDATA%\LocalReel`（配置），与安装目录分离：升级、卸载、移动程序都不会影响
+媒体库与观看进度。
+
+产物未签名，SmartScreen 会提示，请先用 `SHA256SUMS.txt` 校验；卸载只移除程序文件，
+媒体库与账户数据默认保留。
 
 本仓库是产品仓库：负责下载入口、组合组件与文档。服务器与界面分别在
 `localreel-core`、`localreel-web` 两个仓库，均可独立构建与测试；共享的
