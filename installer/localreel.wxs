@@ -11,11 +11,28 @@
     <MajorUpgrade DowngradeErrorMessage="A newer version of LocalReel is already installed." />
     <MediaTemplate EmbedCab="yes" />
 
+    <!-- Executable icon: used by the shortcuts, Apps & Features, and the
+         Explorer entry. -->
+    <Icon Id="LocalReelIcon" SourceFile="$(var.IconFile)" />
+    <Property Id="ARPPRODUCTICON" Value="LocalReelIcon" />
+
     <!-- The install directory is chosen in the wizard (default
          %LOCALAPPDATA%\LocalReel). For unattended installs pass
          INSTALLFOLDER="D:\Apps\LocalReel" on the msiexec command line. -->
     <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
     <WixVariable Id="WixUILicenseRtf" Value="$(var.LicenseRtf)" />
+
+    <!-- Finish page: start the application right after installing, so the
+         first thing a new user sees is the web UI, not a Start Menu hunt. -->
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch LocalReel" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+    <CustomAction
+        Id="LaunchLocalReel"
+        FileRef="LocalReelExe"
+        ExeCommand=""
+        Execute="immediate"
+        Impersonate="yes"
+        Return="asyncNoWait" />
 
     <StandardDirectory Id="LocalAppDataFolder">
       <Directory Id="INSTALLFOLDER" Name="LocalReel">
@@ -30,10 +47,23 @@
       <Directory Id="ApplicationProgramsFolder" Name="LocalReel" />
     </StandardDirectory>
 
+    <StandardDirectory Id="DesktopFolder" />
+
+    <UI>
+      <Publish
+          Dialog="ExitDialog"
+          Control="Finish"
+          Order="1"
+          Event="DoAction"
+          Value="LaunchLocalReel"
+          Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed" />
+    </UI>
+
     <Feature Id="MainFeature" Title="LocalReel" Level="1">
       <ComponentGroupRef Id="ProductComponents" />
       <ComponentGroupRef Id="FfmpegComponents" />
       <ComponentRef Id="StartMenuShortcut" />
+      <ComponentRef Id="DesktopShortcut" />
     </Feature>
   </Package>
 
@@ -77,9 +107,24 @@
           Description="Local-first media server"
           Target="[INSTALLFOLDER]localreel.exe"
           WorkingDirectory="INSTALLFOLDER"
+          Icon="LocalReelIcon"
           Arguments="serve" />
       <RemoveFolder Id="RemoveApplicationProgramsFolder" On="uninstall" />
       <RegistryValue Root="HKCU" Key="Software\LocalReel" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <!-- A desktop shortcut costs nothing and saves the "where did it go?"
+         moment after the wizard closes. -->
+    <Component Id="DesktopShortcut" Directory="DesktopFolder" Guid="*">
+      <Shortcut
+          Id="DesktopShortcut"
+          Name="LocalReel"
+          Description="Local-first media server"
+          Target="[INSTALLFOLDER]localreel.exe"
+          WorkingDirectory="INSTALLFOLDER"
+          Icon="LocalReelIcon"
+          Arguments="serve" />
+      <RegistryValue Root="HKCU" Key="Software\LocalReel" Name="desktopShortcut" Type="integer" Value="1" KeyPath="yes" />
     </Component>
   </Fragment>
 </Wix>

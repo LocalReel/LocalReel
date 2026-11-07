@@ -67,6 +67,10 @@ New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Output) | Out-Nul
 if (Test-Path -LiteralPath $Output) { Remove-Item -LiteralPath $Output -Force }
 
 $licenseRtf = Join-Path $root 'installer\license.rtf'
+$icon = Join-Path $root 'installer\localreel.ico'
+if (-not (Test-Path -LiteralPath $icon)) {
+    throw "missing $icon"
+}
 
 # Optional ffmpeg payload: generate components only for files that were staged,
 # so a package without bundled ffmpeg still builds an empty group.
@@ -101,6 +105,7 @@ try {
         -d "SourceDir=$Stage" `
         -d "Version=$Version" `
         -d "LicenseRtf=$licenseRtf" `
+        -d "IconFile=$icon" `
         -o $Output
     if ($LASTEXITCODE -ne 0) { throw "wix build failed with exit $LASTEXITCODE" }
 } finally {
