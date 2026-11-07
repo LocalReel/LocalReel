@@ -60,9 +60,11 @@ Without `-InstallDir` it installs to `%LOCALAPPDATA%\LocalReel` and writes an
 4. Playback is direct for MP4 (H.264/AAC). H.264 files in MKV/MOV/TS/FLV/AVI
    are remuxed into MP4 in seconds; other codecs are re-encoded (slow).
 
-**Stopping it.** Right-click the tray icon → **Quit**. When you start the server
-from a terminal, `--tray` hides nothing: the console stays, because the console
-belongs to your terminal, and `Ctrl+C` still stops it.
+**Stopping it.** Right-click the tray icon → **Quit**, or open **Admin →
+Server → Shut down server** (the path that works without a tray, e.g. on
+Linux and macOS). When you start the server from a terminal, `--tray` hides
+nothing: the console stays, because the console belongs to your terminal, and
+`Ctrl+C` still stops it.
 
 ```powershell
 .\localreel.exe serve              # console only, Ctrl+C to stop

@@ -50,7 +50,7 @@ and releasable. See [docs/architecture.md](docs/architecture.md).
   binary or on `PATH`.
 - **Desktop launch** — a double-click starts the server, opens the browser and
   leaves a tray icon to reopen the UI or quit; from a terminal the console stays
-  and Ctrl+C works.
+  and Ctrl+C works. Where there is no tray, **Admin → Server** stops the process.
 - **Distribution** — Windows zip and per-user MSI; a .deb with the systemd unit,
   a Linux tarball and a Docker image are built from source on those hosts.
 
