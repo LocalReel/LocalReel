@@ -407,7 +407,9 @@ jobs:
           set -euo pipefail
           find artifacts -type f \( -name '*.zip' -o -name '*.msi' -o -name '*.tar.gz' -o -name '*.deb' -o -name '*.AppImage' -o -name '*.dmg' -o -name '*.spk' \) \
             -exec cp {} . \;
-          sha256sum * > SHA256SUMS.txt
+          # Only the files themselves: the download directory is a directory and
+          # sha256sum refuses it.
+          find . -maxdepth 1 -type f ! -name 'SHA256SUMS.txt' -exec sha256sum {} + | sort -k2 > SHA256SUMS.txt
           cat SHA256SUMS.txt
       - uses: softprops/action-gh-release@v2
         with:
