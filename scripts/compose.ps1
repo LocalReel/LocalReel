@@ -146,7 +146,7 @@ foreach ($script in @('install.ps1', 'uninstall.ps1', 'install-task.ps1')) {
 # report stay on GitHub (their hashes change per build, so shipping them would
 # immediately drift); the packaged README links to them by URL.
 New-Item -ItemType Directory -Force -Path (Join-Path $stage 'docs') | Out-Null
-foreach ($doc in @('install.md', 'operations.md', 'packaging.md', 'architecture.md', 'building.md', 'linux.md', 'docker.md', 'service.md', 'signing.md', 'release-checklist.md')) {
+foreach ($doc in @('install.md', 'operations.md', 'packaging.md', 'architecture.md', 'building.md', 'linux.md', 'docker.md', 'service.md', 'signing.md', 'reverse-proxy.md', 'release-checklist.md')) {
     $path = Join-Path $root "docs\$doc"
     if (Test-Path -LiteralPath $path) { Copy-Item -LiteralPath $path -Destination (Join-Path $stage 'docs') }
 }

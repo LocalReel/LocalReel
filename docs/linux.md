@@ -1,25 +1,16 @@
 # Linux packaging and install
 
-Linux is a secondary target: the code is portable and CI runs `cargo test` on
-Ubuntu, but the Windows zip remains the primary distribution.
+Linux is a first-class target: the same binary runs as a desktop app on Ubuntu
+and as the headless server of a NAS or a small always-on machine. It detects
+that it was started by a service manager and stays on a fixed port without
+opening a browser (see [ADR-011](../docs/architecture.md) and `--mode`).
 
-Verified in this workspace (WSL2, Ubuntu 24.04, x86_64, 2026-11-01):
+Two packages are produced from the product repository:
 
-- Linux release build (`cargo build --release`) and `cargo clippy -D warnings`
-  pass; one Windows-only `OsStr` import warning was fixed.
-- `localreel --version` / `doctor`: `web: embedded`.
-- Installed Ubuntu ffmpeg/ffprobe 6.1.1 and scanned the real 12-file library via
-  `/mnt/i`: 12 media, 12 durations, 12 thumbnails (h264/aac, 1280x720).
-- direct playback and `Range: bytes=0-1023` returned `206`.
-- packaged release served `/api/v1/health` (`ok`) and `/` (`200`, embedded UI).
-- tarball (3.3 MB) + `install.sh` / `uninstall.sh` lifecycle passed, including
-  preserving `data/` and `localreel.toml`.
-- installed Chrome 156 + Node 22 in WSL and ran the real-server browser resume
-  test: `expected=165, actual=165, duration=1449.970068, readyState=1` for
-  `S01E12.mp4`.
-
-This is not a bare-metal desktop test; GPU/desktop integration and 4K/HDR
-hardware decode on Linux are still unverified.
+| Artifact | For | Contains |
+|---|---|---|
+| `localreel-<version>-x86_64.tar.gz` | manual installs | binary, docs, `install.sh` / `uninstall.sh` |
+| `localreel_<version>_amd64.deb` | Debian/Ubuntu servers | `/usr/bin/localreel`, systemd unit, docs |
 
 ## Build a tarball
 
@@ -50,9 +41,27 @@ Options:
 Prerequisites: Rust stable, Node/npm if `--build-web`, and (optionally) ffmpeg.
 The web UI is embedded in the binary; no separate `dist` is needed at runtime.
 
-## Install
+## Build a .deb
 
-Extract the tarball and run:
+```bash
+./scripts/package-deb.sh --build-web
+sudo apt install ./dist/localreel_<version>_amd64.deb
+```
+
+The package creates a `localreel` system account, installs
+`/lib/systemd/system/localreel.service`, and leaves the service **disabled**:
+enable it once you have decided that this machine should serve the library.
+
+```bash
+sudo systemctl enable --now localreel
+journalctl -u localreel -f
+```
+
+Data lives in `/var/lib/localreel`, logs in `/var/log/localreel` (and in the
+journal). The service unit sets `LOCALREEL_MODE=server`, so it never tries to
+open a browser.
+
+## Install from the tarball
 
 ```bash
 tar -xzf localreel-<version>-x86_64.tar.gz
@@ -63,33 +72,28 @@ cd localreel-<version>-x86_64
 ./install.sh --install-dir /opt/localreel --no-desktop
 ```
 
-`install.sh` keeps an existing `data/` and `localreel.toml`; it only creates
-`localreel.toml` on first install. Start with:
+`install.sh` only writes the files it owns; the library and accounts live under
+`~/.local/share/localreel` and `~/.config/localreel` either way.
+
+## Run as a service
+
+The core repository ships the units the package uses
+(`localreel-core/packaging/`):
+
+- `localreel.service` — hardened **system** unit, runs as `localreel`, data in
+  `/var/lib/localreel`.
+- `localreel.user.service` — **user** unit for a desktop machine, keeps XDG
+  directories.
 
 ```bash
-~/.local/share/localreel/localreel serve
-# http://127.0.0.1:3001
-```
+# system service
+sudo cp localreel.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now localreel
 
-The desktop entry runs the server in a terminal so you can see logs. For a
-headless/service setup, use a systemd **user** unit:
-
-```ini
-# ~/.config/systemd/user/localreel.service
-[Unit]
-Description=LocalReel media server
-After=network.target
-
-[Service]
-WorkingDirectory=%h/.local/share/localreel
-ExecStart=%h/.local/share/localreel/localreel serve
-Restart=on-failure
-
-[Install]
-WantedBy=default.target
-```
-
-```bash
+# user service (desktop)
+mkdir -p ~/.config/systemd/user
+cp localreel.user.service ~/.config/systemd/user/localreel.service
 systemctl --user daemon-reload
 systemctl --user enable --now localreel
 ```
@@ -97,25 +101,27 @@ systemctl --user enable --now localreel
 ## Uninstall
 
 ```bash
-./uninstall.sh --yes                 # keeps data/ and localreel.toml
+./uninstall.sh --yes                 # keeps data and configuration
 ./uninstall.sh --remove-data --yes   # deletes everything
 ./uninstall.sh --stop-server --yes   # stop a process matching this install
 ```
 
-It removes the app-menu and autostart entries and preserves data/config by
-default.
+The `.deb` removes the program and the unit; `/var/lib/localreel` and
+`/var/log/localreel` are kept.
 
 ## Verify (when a Linux machine is available)
 
 ```bash
 ./localreel --version
-./localreel doctor     # web: embedded, ffmpeg resolved, DB path
-./localreel serve &
+./localreel doctor     # mode, data/config/log dirs, web: embedded, ffmpeg
+./localreel serve --mode server &
 curl -fsS http://127.0.0.1:3001/api/v1/health
+curl -fsS http://127.0.0.1:3001/api/v1/auth/status   # setup_required before first run
 ```
 
-Then open the UI, add a source, scan, and play one file. Do not expose the
-server beyond loopback without an authentication layer.
+Then open the UI, create the owner account, add a source, scan, and play one
+file. Exposing the server beyond loopback is supported now that accounts exist,
+but put it behind a reverse proxy: see [reverse-proxy.md](reverse-proxy.md).
 
 See [operations.md](operations.md) for backup/upgrade and
 [packaging.md](packaging.md) for ffmpeg discovery.

@@ -1,15 +1,16 @@
 # Run LocalReel automatically (Windows)
 
-The portable install creates a Start Menu shortcut but does not start a
+The installer creates Start Menu and desktop shortcuts but does not start a
 background service. Two supported options:
 
 ## Option A — Task Scheduler (recommended)
 
-Register a scheduled task that runs `localreel.exe serve` in the install
-directory (so `localreel.toml` and `data/` resolve there):
+Register a scheduled task that runs `localreel.exe serve` (the task has no
+console, so the server detects the `server` persona automatically: fixed port,
+no browser):
 
 ```powershell
-# from the extracted package / install directory
+# from the install directory
 .\install-task.ps1
 ```
 
@@ -67,17 +68,16 @@ The Task Scheduler option is quieter and supports restart-on-failure.
 
 ## Logs
 
-There is no file logger in v1. The task runs without a console, so use
-`RUST_LOG` and redirect if you need a log:
-
-```powershell
-# custom task action example
-cmd /c ""D:\Apps\LocalReel\localreel.exe" serve 2>> "D:\Apps\LocalReel\localreel.log""
-```
+Every run appends to `%LOCALAPPDATA%\LocalReel\logs\localreel.log` and rotates
+it to `localreel.log.1` at 8 MiB, whether it was started by a shortcut, the
+Task Scheduler or a terminal. Set `LOCALREEL_LOG_DIR` to move it, and `RUST_LOG`
+(e.g. `RUST_LOG=debug`) to change verbosity.
 
 For health, use `GET /api/v1/health` and `GET /api/v1/admin/health`.
 
 ## Linux
 
-Use the systemd **user** unit shown in [linux.md](linux.md). There is no
-Task Scheduler equivalent.
+The `.deb` installs a hardened system unit (`/lib/systemd/system/localreel.service`)
+and the tarball ships both the system and user units in
+`localreel-core/packaging/`. See [linux.md](linux.md). There is no Task
+Scheduler equivalent.
