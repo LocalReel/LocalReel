@@ -15,6 +15,37 @@ are **unsigned**, so Windows SmartScreen may ask for confirmation
   executable, or via `LOCALREEL_FFMPEG_DIR`. `tools\fetch-ffmpeg.ps1` can
   download a verified build for you.
 
+### If you do not want the full ffmpeg
+
+A full build is around 100 MB. Probing only needs `ffprobe`, so three profiles
+are supported:
+
+```powershell
+# scan and catalogue only (one binary, no encoding)
+.\tools\fetch-ffmpeg.ps1 -Url <url> -Sha256 <hash> -Profile probe
+
+# ffmpeg + ffprobe from a smaller "essentials" build
+.\tools\fetch-ffmpeg.ps1 -Url <url> -Sha256 <hash> -Profile mini
+
+# the complete build (default)
+.\tools\fetch-ffmpeg.ps1 -Url <url> -Sha256 <hash>
+```
+
+`-Profile probe` keeps only `ffprobe.exe`. LocalReel then scans, catalogues and
+serves direct-playable files, but thumbnails, transcoding and HLS packaging stay
+off. `localreel doctor` reports the level:
+
+```text
+  ffmpeg:    C:\...\ffmpeg.exe (missing)
+  ffprobe:   C:\...\ffprobe.exe
+```
+
+`full` / `probe-only` / `missing`, and the Admin page shows the same status.
+Adding `ffmpeg.exe` next to `ffprobe.exe` later needs no reconfiguration.
+
+Upstream ships one archive, so `-Profile probe` does not shrink the download —
+it shrinks what is installed and removes the encoder dependency.
+
 ## Option A — MSI (recommended)
 
 1. Download `localreel-<version>-x64.msi`.

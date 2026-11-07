@@ -166,18 +166,26 @@ Copy-Item -LiteralPath (Join-Path $root 'scripts\fetch-ffmpeg.ps1') -Destination
 Copy-Item -LiteralPath (Join-Path $root 'scripts\verify-ffmpeg.ps1') -Destination (Join-Path $stage 'tools')
 
 if ($FfmpegDir) {
-    $source = if (Test-Path (Join-Path $FfmpegDir 'ffmpeg.exe')) {
+    # `-Profile probe` in fetch-ffmpeg.ps1 installs only ffprobe; a probe-only
+    # package is a supported layout, so accept a directory without ffmpeg.exe.
+    $source = if (Test-Path (Join-Path $FfmpegDir 'ffprobe.exe')) {
         $FfmpegDir
-    } elseif (Test-Path (Join-Path $FfmpegDir 'bin\ffmpeg.exe')) {
+    } elseif (Test-Path (Join-Path $FfmpegDir 'bin\ffprobe.exe')) {
         Join-Path $FfmpegDir 'bin'
     } else {
-        throw "ffmpeg.exe/ffprobe.exe not found in $FfmpegDir"
+        throw "ffprobe.exe not found in $FfmpegDir"
     }
     $ffmpegRoot = Join-Path $stage 'ffmpeg'
     $target = Join-Path $ffmpegRoot 'bin'
     New-Item -ItemType Directory -Force -Path $target | Out-Null
-    Copy-Item -LiteralPath (Join-Path $source 'ffmpeg.exe') -Destination $target
+    $hasFfmpeg = Test-Path (Join-Path $source 'ffmpeg.exe')
+    if ($hasFfmpeg) {
+        Copy-Item -LiteralPath (Join-Path $source 'ffmpeg.exe') -Destination $target
+    }
     Copy-Item -LiteralPath (Join-Path $source 'ffprobe.exe') -Destination $target
+    if (-not $hasFfmpeg) {
+        Write-Host 'ffprobe only: the package can scan and catalogue, but cannot transcode.'
+    }
 
     # FFmpeg is a separate GPL/LGPL work: ship its license and a notice next to
     # the binaries instead of only the executables.

@@ -49,8 +49,14 @@ docs/operations.md         (from the core component)
 docs/linux.md, service.md, signing.md, docker.md
 tools/fetch-ffmpeg.ps1
 tools/verify-ffmpeg.ps1
-ffmpeg/bin/...             only with -FfmpegDir
+ffmpeg/bin/...             only with -FfmpegDir (ffprobe.exe alone = probe-only)
 ```
+
+`tools/fetch-ffmpeg.ps1 -Profile probe|mini|full` installs only `ffprobe.exe`
+for `probe`, both binaries for `mini` and `full`. `compose.ps1 -FfmpegDir`
+accepts a directory that contains only `ffprobe.exe` and prints a probe-only
+notice: such a package scans and catalogues, but cannot transcode, generate
+thumbnails or package HLS.
 
 ## MSI
 
