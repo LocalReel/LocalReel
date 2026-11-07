@@ -118,7 +118,7 @@ install -m 0644 "$ROOT/README.md" "$STAGE/README.md"
 install -m 0644 "$ROOT/LICENSE" "$STAGE/LICENSE"
 install -m 0755 "$ROOT/scripts/install.sh" "$STAGE/install.sh"
 install -m 0755 "$ROOT/scripts/uninstall.sh" "$STAGE/uninstall.sh"
-for doc in install.md operations.md packaging.md architecture.md building.md linux.md docker.md service.md signing.md reverse-proxy.md; do
+for doc in install.md operations.md packaging.md architecture.md building.md linux.md macos.md docker.md service.md signing.md reverse-proxy.md; do
   if [ -f "$ROOT/docs/$doc" ]; then
     install -m 0644 "$ROOT/docs/$doc" "$STAGE/docs/$doc"
   fi

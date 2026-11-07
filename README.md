@@ -163,7 +163,7 @@ The components are deliberately separable:
 ## Documentation
 
 - [Install guide](docs/install.md) · [Windows service](docs/service.md) ·
-  [Linux](docs/linux.md) · [Docker](docs/docker.md) ·
+  [Linux](docs/linux.md) · [macOS](docs/macos.md) · [Docker](docs/docker.md) ·
   [Reverse proxy](docs/reverse-proxy.md)
 - [Architecture](docs/architecture.md) · [Building from source](docs/building.md)
   · [Packaging](docs/packaging.md)
