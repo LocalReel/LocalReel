@@ -86,7 +86,8 @@ jobs:
         shell: pwsh
         run: |
           dotnet tool install --global wix --version 5.0.2
-          wix extension add --global WixToolset.UI.wixext/5.0.2
+          "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Append
+          "$env:USERPROFILE\.dotnet\tools\wix.exe" extension add --global WixToolset.UI.wixext/5.0.2
 
       - name: Install web dependencies
         working-directory: localreel-web

@@ -49,7 +49,7 @@ done
 
 [ "$(uname -s)" = "Linux" ] || { echo "package-spk.sh must run on Linux" >&2; exit 1; }
 [ -n "$CORE_DIR" ] && [ -f "$CORE_DIR/Cargo.toml" ] || { echo "localreel-core not found" >&2; exit 1; }
-[ -n "$WEB_DIR" ] && [ -d "$WEB_DIR/dist" ] || { echo "localreel-web dist not found" >&2; exit 1; }
+[ -n "$WEB_DIR" ] && [ -d "$WEB_DIR" ] || { echo "localreel-web not found; pass --web <dir>" >&2; exit 1; }
 
 if [ -z "$VERSION" ]; then
   VERSION="$(awk '
@@ -81,6 +81,11 @@ fi
 if [ "$SKIP_BUILD" -eq 0 ]; then
   echo "building localreel-server (release, $TARGET_ARCH)..."
   (cd "$CORE_DIR" && LOCALREEL_WEB_DIR="$WEB_DIR" cargo build --release -p localreel-server)
+fi
+
+if [ ! -f "$WEB_DIR/dist/index.html" ]; then
+  echo "missing $WEB_DIR/dist/index.html; build the web UI first or pass --build-web" >&2
+  exit 1
 fi
 
 BINARY="$CORE_DIR/target/release/localreel"

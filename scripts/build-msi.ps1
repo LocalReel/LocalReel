@@ -40,15 +40,27 @@ if (-not $Version) {
     }
 }
 
-$wix = if ($env:WIX) {
-    $env:WIX
-} elseif (Get-Command wix -ErrorAction SilentlyContinue) {
-    (Get-Command wix).Source
-} elseif (Test-Path (Join-Path $env:USERPROFILE '.dotnet\tools\wix.exe')) {
-    Join-Path $env:USERPROFILE '.dotnet\tools\wix.exe'
-} else {
+# WiX 3 sets $env:WIX to its install *directory*, and the v3 executables are
+# candle.exe/light.exe, not `wix`. Only accept a real executable so a machine
+# with WiX 3 installed still builds through the .NET tool.
+function Resolve-Wix {
+    $candidates = @()
+    if ($env:WIX) {
+        $candidates += $env:WIX
+        $candidates += (Join-Path $env:WIX 'wix.exe')
+    }
+    $candidates += (Join-Path $env:USERPROFILE '.dotnet\tools\wix.exe')
+    $command = Get-Command wix -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($command) { $candidates += $command.Source }
+    foreach ($candidate in $candidates) {
+        if ($candidate -and (Test-Path -LiteralPath $candidate -PathType Leaf) -and $candidate -match '\.exe$') {
+            return $candidate
+        }
+    }
     throw 'wix.exe not found; install with: dotnet tool install --global wix --version 5.0.2'
 }
+
+$wix = Resolve-Wix
 
 $extension = 'WixToolset.UI.wixext'
 $installed = & $wix extension list -g 2>&1

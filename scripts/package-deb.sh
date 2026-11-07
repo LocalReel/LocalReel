@@ -60,11 +60,10 @@ if [ -z "$CORE_DIR" ] || [ ! -f "$CORE_DIR/Cargo.toml" ]; then
   echo "localreel-core not found; pass --core <dir>" >&2
   exit 1
 fi
-if [ -z "$WEB_DIR" ] || [ ! -d "$WEB_DIR/dist" ]; then
-  echo "localreel-web dist not found; pass --web <dir>" >&2
+if [ -z "$WEB_DIR" ] || [ ! -d "$WEB_DIR" ]; then
+  echo "localreel-web not found; pass --web <dir>" >&2
   exit 1
 fi
-
 if [ -z "$VERSION" ]; then
   VERSION="$(awk '
     /^\[workspace.package\]/ { in_section=1; next }
@@ -91,6 +90,11 @@ fi
 if [ "$SKIP_BUILD" -eq 0 ]; then
   echo "building localreel-server (release)..."
   (cd "$CORE_DIR" && LOCALREEL_WEB_DIR="$WEB_DIR" cargo build --release -p localreel-server)
+fi
+
+if [ ! -f "$WEB_DIR/dist/index.html" ]; then
+  echo "missing $WEB_DIR/dist/index.html; build the web UI first or pass --build-web" >&2
+  exit 1
 fi
 
 BINARY="$CORE_DIR/target/release/localreel"
