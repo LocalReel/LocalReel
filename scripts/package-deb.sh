@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-# Build a Debian package for the LocalReel server (systemd service, no desktop
-# entry). Run on Linux with dpkg-deb available, or on a machine that only needs
-# to produce the archive from an existing binary (--skip-build).
+# Build a Debian package for LocalReel: the server with its systemd unit plus a
+# desktop menu entry. Run on Linux with dpkg-deb available, or on a machine that
+# only needs to produce the archive from an existing binary (--skip-build).
 #
 #   scripts/package-deb.sh --core ../localreel-core --web ../localreel-web
 #
 # Layout:
 #   /usr/bin/localreel
 #   /lib/systemd/system/localreel.service
+#   /usr/share/applications/localreel.desktop
+#   /usr/share/icons/hicolor/256x256/apps/localreel.png
 #   /usr/share/doc/localreel/{README.md,LICENSE,docs/…}
 set -euo pipefail
 
@@ -103,6 +105,8 @@ rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR/DEBIAN"
 mkdir -p "$BUILD_DIR/usr/bin"
 mkdir -p "$BUILD_DIR/lib/systemd/system"
+mkdir -p "$BUILD_DIR/usr/share/applications"
+mkdir -p "$BUILD_DIR/usr/share/icons/hicolor/256x256/apps"
 mkdir -p "$BUILD_DIR/usr/share/doc/localreel/docs"
 
 install -m 0755 "$BINARY" "$BUILD_DIR/usr/bin/localreel"
@@ -115,6 +119,30 @@ chmod 0644 "$BUILD_DIR/lib/systemd/system/localreel.service"
 
 install -m 0644 "$ROOT/README.md" "$BUILD_DIR/usr/share/doc/localreel/README.md"
 install -m 0644 "$ROOT/LICENSE" "$BUILD_DIR/usr/share/doc/localreel/LICENSE"
+
+# Desktop entry: a menu launch keeps the console visible (Terminal=true) so the
+# log stays in sight and Ctrl+C is the way out; the systemd service is the
+# headless path.
+cat > "$BUILD_DIR/usr/share/applications/localreel.desktop" <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=LocalReel
+GenericName=Media Server
+Comment=Local-first media server with a browser interface
+Exec=localreel serve
+Terminal=true
+Icon=localreel
+Categories=AudioVideo;Video;Player;
+Keywords=media;video;server;stream;
+StartupNotify=true
+EOF
+chmod 0644 "$BUILD_DIR/usr/share/applications/localreel.desktop"
+
+if [ -f "$CORE_DIR/crates/localreel-server/assets/localreel-256.png" ]; then
+  install -m 0644 "$CORE_DIR/crates/localreel-server/assets/localreel-256.png" \
+    "$BUILD_DIR/usr/share/icons/hicolor/256x256/apps/localreel.png"
+fi
+
 for doc in install.md operations.md architecture.md building.md linux.md docker.md service.md signing.md reverse-proxy.md; do
   if [ -f "$ROOT/docs/$doc" ]; then
     install -m 0644 "$ROOT/docs/$doc" "$BUILD_DIR/usr/share/doc/localreel/docs/$doc"
@@ -135,8 +163,9 @@ Description: Local-first media server with a built-in web UI
  LocalReel indexes local media, generates metadata and thumbnails with
  ffmpeg, and serves a private web interface on the loopback address.
  .
- This package installs the server and a systemd service. Accounts are
- managed in the web UI; the first run asks for the owner account.
+ This package installs the server, a systemd service and a desktop menu
+ entry. Accounts are managed in the web UI; the first run asks for the
+ owner account.
 EOF
 
 cat > "$BUILD_DIR/DEBIAN/postinst" <<'EOF'

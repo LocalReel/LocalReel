@@ -48,9 +48,19 @@ The web UI is embedded in the binary; no separate `dist` is needed at runtime.
 sudo apt install ./dist/localreel_<version>_amd64.deb
 ```
 
-The package creates a `localreel` system account, installs
-`/lib/systemd/system/localreel.service`, and leaves the service **disabled**:
-enable it once you have decided that this machine should serve the library.
+The package contains:
+
+| Path | Purpose |
+|---|---|
+| `/usr/bin/localreel` | the binary, web UI embedded |
+| `/lib/systemd/system/localreel.service` | hardened system unit (runs as `localreel`) |
+| `/usr/share/applications/localreel.desktop` | menu entry; launches `localreel serve` in a terminal so the log and `Ctrl+C` are visible |
+| `/usr/share/icons/hicolor/256x256/apps/localreel.png` | menu icon |
+| `/usr/share/doc/localreel/` | README, license, these docs |
+
+The package creates a `localreel` system account and leaves the service
+**disabled**: enable it once you have decided that this machine should serve the
+library.
 
 ```bash
 sudo systemctl enable --now localreel
@@ -59,7 +69,8 @@ journalctl -u localreel -f
 
 Data lives in `/var/lib/localreel`, logs in `/var/log/localreel` (and in the
 journal). The service unit sets `LOCALREEL_MODE=server`, so it never tries to
-open a browser.
+open a browser. The desktop entry is the opposite case: it runs in a terminal
+window so stopping it is `Ctrl+C`.
 
 ## Install from the tarball
 
