@@ -15,10 +15,20 @@ on:
       version:
         description: Version to build (defaults to components.json)
         required: false
+      publish:
+        description: Also build and push the multi-arch container image
+        type: boolean
+        default: false
 
 permissions:
   contents: write
   packages: write
+
+# One release per ref at a time; a superseded run is cancelled, but a tag build
+# is never interrupted half-way through publishing.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   ORG: LocalReel
@@ -26,6 +36,7 @@ env:
 jobs:
   version:
     name: resolve version
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.resolve.outputs.version }}
@@ -53,6 +64,7 @@ jobs:
   windows:
     name: windows
     needs: version
+    timeout-minutes: 60
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -120,6 +132,7 @@ jobs:
   linux:
     name: linux
     needs: version
+    timeout-minutes: 45
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -190,6 +203,7 @@ jobs:
   macos:
     name: macos
     needs: version
+    timeout-minutes: 45
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -265,6 +279,7 @@ jobs:
   spk:
     name: synology package (experimental)
     needs: version
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -324,10 +339,14 @@ jobs:
           path: product/dist/*.spk
           if-no-files-found: error
 
+  # Smoke test on every run: the image must build, start, serve, and refuse
+  # anonymous requests. The publishing path below is separate so a push to main
+  # does not touch the registry.
   docker:
-    name: docker
+    name: docker (smoke)
     needs: version
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
@@ -340,7 +359,6 @@ jobs:
           token: ${{ secrets.COMPONENTS_TOKEN || github.token }}
           path: localreel-web
 
-      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
 
       - name: Build amd64 and smoke test it
@@ -350,6 +368,8 @@ jobs:
           docker buildx build \
             --build-context web=../localreel-web \
             --platform linux/amd64 \
+            --cache-from type=gha,scope=docker-smoke \
+            --cache-to type=gha,mode=max,scope=docker-smoke \
             --load \
             -t localreel:test \
             .
@@ -367,17 +387,45 @@ jobs:
           curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3001/api/v1/media | grep -qx '401'
           docker rm -f lr
 
+  # Each architecture is built on a native runner: arm64 NAS boxes are half the
+  # target fleet, and emulating the Rust and Node builds through QEMU took 36
+  # minutes. The legs push per-architecture tags; docker-manifest merges them.
+  docker-publish:
+    name: docker push (${{ matrix.arch }})
+    needs: version
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.publish
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.ORG }}/localreel-core
+          token: ${{ secrets.COMPONENTS_TOKEN || github.token }}
+          path: localreel-core
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.ORG }}/localreel-web
+          token: ${{ secrets.COMPONENTS_TOKEN || github.token }}
+          path: localreel-web
+
+      - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
-        if: startsWith(github.ref, 'refs/tags/v')
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # arm64 NAS boxes are half the target fleet; the same image is built for
-      # both architectures with QEMU. Only a tag publishes it.
-      - name: Build and push multi-arch
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Build and push linux/${{ matrix.arch }}
         working-directory: localreel-core
         run: |
           set -euo pipefail
@@ -385,18 +433,48 @@ jobs:
           version="${{ needs.version.outputs.version }}"
           docker buildx build \
             --build-context web=../localreel-web \
-            --platform linux/amd64,linux/arm64 \
+            --platform ${{ matrix.platform }} \
             --label "org.opencontainers.image.version=$version" \
             --label "org.opencontainers.image.source=https://github.com/$ORG/${{ github.event.repository.name }}" \
-            --tag "$image:$version" \
-            --tag "$image:latest" \
+            --cache-from type=gha,scope=docker-${{ matrix.arch }} \
+            --cache-to type=gha,mode=max,scope=docker-${{ matrix.arch }} \
+            --tag "$image:$version-${{ matrix.arch }}" \
             --push \
             .
+
+  docker-manifest:
+    name: docker manifest
+    needs: [version, docker-publish]
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Merge the two architectures
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          IS_TAG: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/$(echo "$ORG" | tr '[:upper:]' '[:lower:]')/localreel"
+          tags=(-t "$image:$VERSION")
+          # Only a release tag moves `latest`; a manual run leaves it alone.
+          if [ "$IS_TAG" = "true" ]; then tags+=(-t "$image:latest"); fi
+          docker buildx imagetools create "${tags[@]}" \
+            "$image:$VERSION-amd64" "$image:$VERSION-arm64"
+          docker buildx imagetools inspect "$image:$VERSION"
 
   release:
     name: publish
     needs: [version, windows, linux, macos, spk]
     if: startsWith(github.ref, 'refs/tags/v')
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
