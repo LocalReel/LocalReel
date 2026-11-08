@@ -91,8 +91,22 @@ if ($RemoveData) {
         Copy-Item -LiteralPath $stale -Destination (Join-Path $configDir 'localreel.toml') -Force
         Write-Host "Kept config: $(Join-Path $configDir 'localreel.toml')"
     }
+    # A relative [data] dir resolves against the program's directory, so the
+    # library can sit inside the folder being removed. Move it aside first and
+    # put it back afterwards; deleting the program must never delete media.
+    $insideData = Join-Path $InstallDir 'data'
+    $stash = $null
+    if (Test-Path -LiteralPath $insideData) {
+        $stash = Join-Path ([System.IO.Path]::GetTempPath()) ('localreel-data-' + [guid]::NewGuid().ToString('N') + '.keep')
+        Move-Item -LiteralPath $insideData -Destination $stash
+    }
     Remove-Item -LiteralPath $InstallDir -Recurse -Force
     Write-Host "Removed program files from $InstallDir."
+    if ($stash) {
+        New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
+        Move-Item -LiteralPath $stash -Destination $insideData
+        Write-Host "Kept library inside the install folder: $insideData"
+    }
     if (Test-Path -LiteralPath $dataDir) {
         Write-Host "Kept data: $dataDir"
     }

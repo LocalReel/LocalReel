@@ -214,29 +214,45 @@ mod run {
         if let Err(error) = win::unregister_uninstall() {
             eprintln!("could not remove the uninstall entry: {error}");
         }
-        if let Err(error) = win::remove_dir_all_with_retry(target) {
-            println!("{}", text.format(text.failed, &[("error", &error.to_string())]));
-            return pause_exit(text, 1);
-        }
+        remove_program_files(target);
         if let Some(temp) = detached {
             let _ = fs::remove_file(temp);
         }
-
-        println!("{}", text.uninstall_done);
-        let data = win::data_dir();
-        if options.remove_data {
-            match win::remove_dir_all_with_retry(&data) {
-                Ok(()) => println!("{}", text.format(text.data_removed, &[("dir", &data.to_string_lossy())])),
-                Err(error) => println!(
-                    "{}",
-                    text.format(text.failed, &[("error", &error.to_string())])
-                ),
-            }
-        } else if data.is_dir() {
+        if target.join("localreel.exe").is_file() {
             println!(
                 "{}",
-                text.format(text.data_kept, &[("dir", &data.to_string_lossy())])
+                text.format(text.failed, &[("error", "localreel.exe is still in place")])
             );
+            return pause_exit(text, 1);
+        }
+
+        println!("{}", text.uninstall_done);
+        let libraries = [win::data_dir(), target.join("data")];
+        if options.remove_data {
+            for data in libraries {
+                if !data.is_dir() {
+                    continue;
+                }
+                match win::remove_dir_all_with_retry(&data) {
+                    Ok(()) => println!(
+                        "{}",
+                        text.format(text.data_removed, &[("dir", &data.to_string_lossy())])
+                    ),
+                    Err(error) => println!(
+                        "{}",
+                        text.format(text.failed, &[("error", &error.to_string())])
+                    ),
+                }
+            }
+        } else {
+            for data in libraries {
+                if data.is_dir() {
+                    println!(
+                        "{}",
+                        text.format(text.data_kept, &[("dir", &data.to_string_lossy())])
+                    );
+                }
+            }
         }
         if !options.silent {
             pause(text);
@@ -320,14 +336,26 @@ mod run {
             }
         }
 
+        // Record exactly what was written. Uninstall removes those files and
+        // leaves everything else alone, so a library that the relative
+        // `[data] dir` put inside the install folder survives the uninstall.
+        let files = collect_files(target);
         let estimated_kb = directory_size_kb(target);
-        let manifest = format!(
-            "{{\n  \"product\": \"LocalReel\",\n  \"version\": \"{VERSION}\",\n  \"build\": \"{BUILD_STAMP}\",\n  \"installed_at\": \"{}\",\n  \"install_dir\": {},\n  \"per_user\": true,\n  \"estimated_kb\": {estimated_kb}\n}}\n",
-            timestamp(),
-            json_string(&target.to_string_lossy()),
-        );
-        fs::write(target.join("install.json"), manifest)
-            .map_err(|error| format!("cannot write install.json: {error}"))?;
+        let manifest = serde_json::json!({
+            "product": "LocalReel",
+            "version": VERSION,
+            "build": BUILD_STAMP,
+            "installed_at": timestamp(),
+            "install_dir": target.to_string_lossy(),
+            "per_user": true,
+            "estimated_kb": estimated_kb,
+            "files": files,
+        });
+        fs::write(
+            target.join("install.json"),
+            serde_json::to_string_pretty(&manifest).map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| format!("cannot write install.json: {error}"))?;
 
         let launcher = if target.join("localreel-desktop.exe").is_file() {
             target.join("localreel-desktop.exe")
@@ -374,19 +402,98 @@ mod run {
             .unwrap_or_else(|_| "0".to_string())
     }
 
-    fn json_string(value: &str) -> String {
-        let mut escaped = String::with_capacity(value.len() + 2);
-        escaped.push('"');
-        for character in value.chars() {
-            match character {
-                '"' => escaped.push_str("\\\""),
-                '\\' => escaped.push_str("\\\\"),
-                control if control.is_control() => escaped.push(' '),
-                other => escaped.push(other),
+    /// Every file below `root`, relative to it, with `/` separators. The
+    /// manifest itself is excluded: uninstall deletes it last.
+    fn collect_files(root: &Path) -> Vec<String> {
+        let mut files = Vec::new();
+        collect_files_into(root, root, &mut files);
+        files.sort();
+        files
+    }
+
+    fn collect_files_into(root: &Path, dir: &Path, files: &mut Vec<String>) {
+        let Ok(entries) = fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            match entry.file_type() {
+                Ok(kind) if kind.is_dir() => collect_files_into(root, &path, files),
+                Ok(_) => {
+                    if let Ok(relative) = path.strip_prefix(root) {
+                        if relative != Path::new("install.json") {
+                            files.push(relative.to_string_lossy().replace('\\', "/"));
+                        }
+                    }
+                }
+                Err(_) => {}
             }
         }
-        escaped.push('"');
-        escaped
+    }
+
+    /// Remove the files the manifest lists and any directory they leave empty.
+    ///
+    /// Everything else stays, which is the point: when `[data] dir` is relative
+    /// the library lives under the install folder, and uninstalling the program
+    /// must not take the household's media with it.
+    fn remove_program_files(target: &Path) {
+        let listed: Vec<String> = fs::read_to_string(target.join("install.json"))
+            .ok()
+            .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+            .and_then(|value| {
+                value
+                    .get("files")
+                    .and_then(|files| files.as_array())
+                    .cloned()
+            })
+            .map(|files| {
+                files
+                    .iter()
+                    .filter_map(|item| item.as_str().map(str::to_owned))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        if listed.is_empty() {
+            // No usable manifest: keep the library folder, drop the rest.
+            if let Ok(entries) = fs::read_dir(target) {
+                for entry in entries.flatten() {
+                    if entry.file_name() == "data" {
+                        continue;
+                    }
+                    let path = entry.path();
+                    if path.is_dir() {
+                        let _ = fs::remove_dir_all(&path);
+                    } else {
+                        let _ = fs::remove_file(&path);
+                    }
+                }
+            }
+            return;
+        }
+
+        for relative in listed {
+            let path = target.join(relative);
+            if path.starts_with(target) {
+                let _ = fs::remove_file(&path);
+            }
+        }
+        let _ = fs::remove_file(target.join("install.json"));
+        prune_empty_dirs(target);
+    }
+
+    /// Remove directories that became empty, leaving `target` itself when it
+    /// still holds something.
+    fn prune_empty_dirs(dir: &Path) {
+        let Ok(entries) = fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            if entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false) {
+                prune_empty_dirs(&entry.path());
+            }
+        }
+        let _ = fs::remove_dir(dir);
     }
 
     fn confirm(question: &str, default_yes: bool) -> bool {
@@ -449,9 +556,28 @@ mod run {
         }
 
         #[test]
-        fn json_strings_are_escaped() {
-            assert_eq!(json_string("C:\\Apps"), "\"C:\\\\Apps\"");
-            assert_eq!(json_string("a\"b"), "\"a\\\"b\"");
+        fn uninstall_keeps_a_library_inside_the_install_folder() {
+            let dir = std::env::temp_dir().join(format!(
+                "localreel-setup-test-{}",
+                std::process::id()
+            ));
+            let _ = fs::remove_dir_all(&dir);
+            fs::create_dir_all(dir.join("data")).unwrap();
+            fs::write(dir.join("localreel.exe"), b"exe").unwrap();
+            fs::write(dir.join("localreel.toml"), b"config").unwrap();
+            fs::write(dir.join("data").join("localreel.db"), b"db").unwrap();
+            fs::write(
+                dir.join("install.json"),
+                br#"{"files":["localreel.exe","install.json"]}"#,
+            )
+            .unwrap();
+
+            remove_program_files(&dir);
+
+            assert!(!dir.join("localreel.exe").exists());
+            assert!(dir.join("localreel.toml").exists());
+            assert!(dir.join("data").join("localreel.db").exists());
+            let _ = fs::remove_dir_all(&dir);
         }
     }
 }

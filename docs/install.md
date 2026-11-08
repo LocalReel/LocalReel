@@ -161,10 +161,12 @@ signs that account out everywhere.
 Program and data are deliberately separate: upgrading, uninstalling or moving
 the program never touches the library or the accounts.
 
-A relative `[data] dir` in the config file is resolved against **that file's
-directory**, never the working directory the server was started from, so a
-double-click, a shortcut and a terminal all use the same library. Prefer an
-absolute path when the library lives on another drive.
+A relative `[data] dir` is resolved against the **program's directory** (the
+install folder), never the working directory the server was started from: the
+library follows the installation, so a double-click, a shortcut and a terminal
+all use the same one, and moving the installed folder takes the library along.
+Uninstalling keeps a library that lives inside the install folder. Use an
+absolute path to pin the library elsewhere.
 
 Override with `LOCALREEL_DATA_DIR`, `LOCALREEL_LOG_DIR`, `LOCALREEL_CONFIG`,
 `LOCALREEL_PORT`, `LOCALREEL_HOST` when you need a different layout.
