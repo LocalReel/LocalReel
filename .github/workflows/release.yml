@@ -486,7 +486,7 @@ jobs:
       - name: Checksums
         run: |
           set -euo pipefail
-          find artifacts -type f \( -name '*.zip' -o -name '*.msi' -o -name '*.tar.gz' -o -name '*.deb' -o -name '*.AppImage' -o -name '*.dmg' -o -name '*.spk' \) \
+          find artifacts -type f \( -name '*.zip' -o -name '*.msi' -o -name '*-setup.exe' -o -name '*.tar.gz' -o -name '*.deb' -o -name '*.AppImage' -o -name '*.dmg' -o -name '*.spk' \) \
             -exec cp {} . \;
           # Only the files themselves: the download directory is a directory and
           # sha256sum refuses it.
