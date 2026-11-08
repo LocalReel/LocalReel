@@ -49,7 +49,7 @@ Upstream ships one archive, so `-Profile probe` does not shrink the download —
 
 1. Download `localreel-<version>-x64.msi`.
 2. Double-click it. The wizard asks where to install:
-   - default: `%LOCALAPPDATA%\LocalReel` (per-user, no administrator rights);
+   - default: `%LOCALAPPDATA%\Programs\LocalReel` (per-user, no administrator rights);
    - or **Browse…** to pick any folder you own, e.g. `D:\Apps\LocalReel`.
 3. Finish the wizard. A Start Menu shortcut and a desktop shortcut named
    *LocalReel* are created; both run `localreel-desktop.exe`, a GUI-subsystem
@@ -73,7 +73,7 @@ the per-user installer cannot change them, and the wizard stops with `Error: 5`.
 
 Pick one:
 
-- install to the default `%LOCALAPPDATA%\LocalReel`, or to a folder on a drive you
+- install to the default `%LOCALAPPDATA%\Programs\LocalReel`, or to a folder on a drive you
   already install software to;
 - use the portable zip on that drive instead: it never touches `Config.Msi`;
 - or remove the stale folder once from an **administrator** prompt and retry —
@@ -95,7 +95,7 @@ The message names the volume that needs this and is not specific to LocalReel.
 # other switches: -DesktopShortcut, -StartOnLogin, -NoShortcuts
 ```
 
-Without `-InstallDir` it installs to `%LOCALAPPDATA%\LocalReel` and writes an
+Without `-InstallDir` it installs to `%LOCALAPPDATA%\Programs\LocalReel` and writes an
 `install.json` manifest. You can also run the package in place
 (`.\localreel.exe doctor`, `.\localreel.exe serve`) without installing.
 
@@ -140,7 +140,7 @@ signs that account out everywhere.
 
 | What | Location |
 |---|---|
-| Program | the folder chosen during install |
+| Program | the folder chosen during install (default `%LOCALAPPDATA%\Programs\LocalReel`) |
 | Data (database, thumbnails, transcodes, HLS cache) | `%LOCALAPPDATA%\LocalReel` |
 | Config | `%APPDATA%\LocalReel\localreel.toml` (optional) |
 | Logs | `%LOCALAPPDATA%\LocalReel\logs\localreel.log` |

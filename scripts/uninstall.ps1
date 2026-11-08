@@ -14,7 +14,7 @@ if (-not $InstallDir) {
     if (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'localreel.exe')) {
         $InstallDir = $PSScriptRoot
     } else {
-        $InstallDir = Join-Path $env:LOCALAPPDATA 'LocalReel'
+        $InstallDir = Join-Path (Join-Path $env:LOCALAPPDATA 'Programs') 'LocalReel'
     }
 }
 
@@ -65,20 +65,36 @@ foreach ($path in ($shortcuts + $defaults)) {
     }
 }
 
+# The program lives under %LOCALAPPDATA%\Programs\LocalReel; the library, the
+# database and the caches live in %LOCALAPPDATA%\LocalReel (or wherever
+# LOCALREEL_DATA_DIR points). Removing one must never take the other with it.
+$dataDir = if ($env:LOCALREEL_DATA_DIR) {
+    $env:LOCALREEL_DATA_DIR
+} else {
+    Join-Path $env:LOCALAPPDATA 'LocalReel'
+}
+
 if ($RemoveData) {
     Remove-Item -LiteralPath $InstallDir -Recurse -Force
-    Write-Host "Removed $InstallDir (including data)."
-} else {
-    Get-ChildItem -LiteralPath $InstallDir | Where-Object {
-        $_.Name -notin @('data', 'localreel.toml')
-    } | ForEach-Object {
-        Remove-Item -LiteralPath $_.FullName -Recurse -Force
-    }
     Write-Host "Removed program files from $InstallDir."
-    if (Test-Path -LiteralPath (Join-Path $InstallDir 'data')) {
-        Write-Host "Kept data: $(Join-Path $InstallDir 'data')"
+    if ((Test-Path -LiteralPath $dataDir) -and ($dataDir -ne $InstallDir)) {
+        Remove-Item -LiteralPath $dataDir -Recurse -Force
+        Write-Host "Removed data: $dataDir"
     }
-    if (Test-Path -LiteralPath (Join-Path $InstallDir 'localreel.toml')) {
-        Write-Host "Kept config: $(Join-Path $InstallDir 'localreel.toml')"
+} else {
+    # A config file written by an older per-directory install is worth keeping:
+    # move it where the program looks for it now before the folder goes away.
+    $stale = Join-Path $InstallDir 'localreel.toml'
+    $configDir = Join-Path $env:APPDATA 'LocalReel'
+    if (Test-Path -LiteralPath $stale) {
+        New-Item -ItemType Directory -Force -Path $configDir | Out-Null
+        Copy-Item -LiteralPath $stale -Destination (Join-Path $configDir 'localreel.toml') -Force
+        Write-Host "Kept config: $(Join-Path $configDir 'localreel.toml')"
+    }
+    Remove-Item -LiteralPath $InstallDir -Recurse -Force
+    Write-Host "Removed program files from $InstallDir."
+    if (Test-Path -LiteralPath $dataDir) {
+        Write-Host "Kept data: $dataDir"
     }
 }
+

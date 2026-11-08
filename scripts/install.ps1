@@ -1,7 +1,7 @@
 param(
     [string]$ZipPath,
     [string]$SourceDir,
-    [string]$InstallDir = (Join-Path $env:LOCALAPPDATA 'LocalReel'),
+    [string]$InstallDir = (Join-Path (Join-Path $env:LOCALAPPDATA 'Programs') 'LocalReel'),
     [switch]$DesktopShortcut,
     [switch]$StartOnLogin,
     [switch]$NoShortcuts,
@@ -141,3 +141,4 @@ try {
         Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
+

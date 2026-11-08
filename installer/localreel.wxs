@@ -34,11 +34,17 @@
         Impersonate="yes"
         Return="asyncNoWait" />
 
+    <!-- Per-user install: the program lives beside other per-user programs, and
+         the library, database and caches stay in %LOCALAPPDATA%\LocalReel. The
+         two used to share one folder, which made "uninstall" and "my library"
+         the same question. -->
     <StandardDirectory Id="LocalAppDataFolder">
-      <Directory Id="INSTALLFOLDER" Name="LocalReel">
-        <Directory Id="DocsFolder" Name="docs" />
-        <Directory Id="FfmpegFolder" Name="ffmpeg">
-          <Directory Id="FfmpegBinFolder" Name="bin" />
+      <Directory Id="ProgramsFolder" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="LocalReel">
+          <Directory Id="DocsFolder" Name="docs" />
+          <Directory Id="FfmpegFolder" Name="ffmpeg">
+            <Directory Id="FfmpegBinFolder" Name="bin" />
+          </Directory>
         </Directory>
       </Directory>
     </StandardDirectory>
