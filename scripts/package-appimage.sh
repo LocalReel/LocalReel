@@ -95,9 +95,26 @@ ICON="$CORE_DIR/crates/localreel-server/assets/localreel-256.png"
 APPIMAGETOOL="$TOOLS_DIR/appimagetool-$ARCH.AppImage"
 if [ ! -x "$APPIMAGETOOL" ]; then
   mkdir -p "$TOOLS_DIR"
-  echo "downloading appimagetool..."
-  curl -fsSL "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-$ARCH.AppImage" \
-    -o "$APPIMAGETOOL"
+  # GitHub occasionally answers a runner with 403/429 or a truncated body; one
+  # silent curl used to abort the whole packaging step. Retry, keep the errors
+  # visible, and refuse a partial download instead of running it.
+  url="https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-$ARCH.AppImage"
+  attempt=1
+  while :; do
+    echo "downloading appimagetool (attempt $attempt)..."
+    if curl -fSL --retry 3 --retry-delay 2 -o "$APPIMAGETOOL.part" "$url" &&
+       [ -s "$APPIMAGETOOL.part" ]; then
+      mv "$APPIMAGETOOL.part" "$APPIMAGETOOL"
+      break
+    fi
+    rm -f "$APPIMAGETOOL.part"
+    if [ "$attempt" -ge 3 ]; then
+      echo "could not download appimagetool from $url" >&2
+      exit 1
+    fi
+    attempt=$((attempt + 1))
+    sleep $((attempt * 5))
+  done
   chmod +x "$APPIMAGETOOL"
 fi
 
