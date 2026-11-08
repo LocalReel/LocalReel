@@ -43,14 +43,14 @@ off. `localreel doctor` reports the level:
 `full` / `probe-only` / `missing`, and the Admin page shows the same status.
 Adding `ffmpeg.exe` next to `ffprobe.exe` later needs no reconfiguration.
 
-Upstream ships one archive, so `-Profile probe` does not shrink the download 鈥?it shrinks what is installed and removes the encoder dependency.
+Upstream ships one archive, so `-Profile probe` does not shrink the download — it shrinks what is installed and removes the encoder dependency.
 
-## Option A 鈥?MSI (recommended)
+## Option A — MSI (recommended)
 
 1. Download `localreel-<version>-x64.msi`.
 2. Double-click it. The wizard asks where to install:
    - default: `%LOCALAPPDATA%\LocalReel` (per-user, no administrator rights);
-   - or **Browse鈥?* to pick any folder you own, e.g. `D:\Apps\LocalReel`.
+   - or **Browse…** to pick any folder you own, e.g. `D:\Apps\LocalReel`.
 3. Finish the wizard. A Start Menu shortcut and a desktop shortcut named
    *LocalReel* are created; both run `localreel-desktop.exe`, a GUI-subsystem
    launcher that starts the server without showing a console window.
@@ -64,7 +64,30 @@ msiexec /i localreel-0.5.0-x64.msi INSTALLFOLDER="D:\Apps\LocalReel" /qn
 Because the package is per-user, do not pick a location that needs
 administrator rights (such as `C:\Program Files`).
 
-## Option B 鈥?portable zip
+### "Could not set file security for file 'X:\Config.Msi\....rbf'"
+
+Windows Installer keeps its rollback files in a `Config.Msi` folder at the root
+of every volume it writes to. If that folder already exists and its permissions
+belong to another account — usually left behind by an earlier elevated install —
+the per-user installer cannot change them, and the wizard stops with `Error: 5`.
+
+Pick one:
+
+- install to the default `%LOCALAPPDATA%\LocalReel`, or to a folder on a drive you
+  already install software to;
+- use the portable zip on that drive instead: it never touches `Config.Msi`;
+- or remove the stale folder once from an **administrator** prompt and retry —
+  replace `D:` with the drive the error names:
+
+  ```powershell
+  takeown /f D:\Config.Msi /a /r /d y
+  icacls D:\Config.Msi /reset /t /c /l
+  rmdir /s /q D:\Config.Msi
+  ```
+
+The message names the volume that needs this and is not specific to LocalReel.
+
+## Option B — portable zip
 
 ```powershell
 # extract the zip, then from inside it:
