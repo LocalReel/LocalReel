@@ -149,7 +149,7 @@ if ($exeName -eq 'localreel.exe') {
 Copy-Item -LiteralPath (Join-Path $core 'localreel.toml.example') -Destination $stage
 Copy-Item -LiteralPath (Join-Path $root 'LICENSE') -Destination $stage
 Copy-Item -LiteralPath (Join-Path $root 'README.md') -Destination $stage
-foreach ($script in @('install.ps1', 'uninstall.ps1', 'install-task.ps1')) {
+foreach ($script in @('install.ps1', 'uninstall.ps1', 'install-task.ps1', 'fix-config-msi.ps1')) {
     Copy-Item -LiteralPath (Join-Path $root "scripts\$script") -Destination $stage
 }
 

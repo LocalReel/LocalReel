@@ -1,22 +1,23 @@
 {
   "product": "LocalReel",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "description": "A private, scrollable streaming app for your own library. This repository only composes the components; each component stays independently buildable and testable.",
   "components": {
     "core": {
       "repository": "https://github.com/LocalReel/localreel-core.git",
       "path": "../localreel-core",
-      "version": "0.5.4",
+      "version": "0.5.5",
       "provides": "localreel-server binary (kernel + media domain + HTTP API)"
     },
     "web": {
       "repository": "https://github.com/LocalReel/localreel-web.git",
       "path": "../localreel-web",
-      "version": "0.5.4",
+      "version": "0.5.5",
       "provides": "React UI static build (dist/) embedded by the core binary"
     }
   }
 }
+
 
 
 

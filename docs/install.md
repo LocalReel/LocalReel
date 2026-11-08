@@ -99,6 +99,7 @@ Pick one:
   ```
 
 The message names the volume that needs this and is not specific to LocalReel.
+The same repair is wrapped in scripts/fix-config-msi.ps1 (elevated, -Drive D:); it probes the folder first and refuses to run while an install is in progress.
 
 ## Option C - portable zip
 
