@@ -23,6 +23,12 @@ fn main() {
     fs::copy(&payload, &target).expect("copy payload");
 
     println!("cargo:rerun-if-changed={}", payload.display());
+    // Without these, Cargo keeps the previously compiled binary when only the
+    // version or the payload changed, and the release ships last version's
+    // installer with this version's name.
+    println!("cargo:rerun-if-env-changed=LOCALREEL_PAYLOAD");
+    println!("cargo:rerun-if-env-changed=LOCALREEL_VERSION");
+    println!("cargo:rerun-if-env-changed=LOCALREEL_BUILD_STAMP");
     println!("cargo:rustc-env=LOCALREEL_VERSION={version}");
     println!("cargo:rustc-env=LOCALREEL_BUILT={}", build_stamp());
 }
