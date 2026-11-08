@@ -91,7 +91,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: localreel-core
+          workspaces: |
+            localreel-core
+            product/installer/setup
 
       # WiX 5 builds the MSI; the UI extension is required by localreel.wxs.
       - name: Install WiX
@@ -125,6 +127,7 @@ jobs:
         with:
           name: windows
           path: |
+            product/dist/localreel-*-x64-setup.exe
             product/dist/localreel-*-x64.zip
             product/dist/localreel-*-x64.msi
           if-no-files-found: error
@@ -508,6 +511,7 @@ jobs:
           tag_name: v${{ needs.version.outputs.version }}
           body_path: release-notes.md
           files: |
+            *-setup.exe
             *.zip
             *.msi
             *.tar.gz

@@ -1,0 +1,23 @@
+[package]
+name = "localreel-setup"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Per-user Windows installer for LocalReel"
+build = "build.rs"
+
+[[bin]]
+name = "localreel-setup"
+path = "src/main.rs"
+
+[dependencies]
+zip = { version = "2", default-features = false, features = ["deflate"] }
+winreg = "0.52"
+mslnk = "0.1"
+windows-sys = { version = "0.59", features = ["Win32_Globalization"] }
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true
+panic = "abort"

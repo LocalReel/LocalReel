@@ -16,10 +16,10 @@ if (-not (Test-Path -LiteralPath $dir)) {
 }
 
 $artifacts = Get-ChildItem -LiteralPath $dir -File |
-    Where-Object { $_.Extension -in '.zip', '.msi' } |
+    Where-Object { $_.Extension -in '.zip', '.msi' -or $_.Name -like '*-setup.exe' } |
     Sort-Object Name
 if (-not $artifacts) {
-    throw "no .zip/.msi artifacts found in $dir"
+    throw "no .zip/.msi/-setup.exe artifacts found in $dir"
 }
 
 $lines = foreach ($artifact in $artifacts) {

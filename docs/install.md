@@ -45,24 +45,37 @@ Adding `ffmpeg.exe` next to `ffprobe.exe` later needs no reconfiguration.
 
 Upstream ships one archive, so `-Profile probe` does not shrink the download — it shrinks what is installed and removes the encoder dependency.
 
-## Option A — MSI (recommended)
+## Option A - per-user setup (recommended)
+
+1. Download `localreel-<version>-x64-setup.exe`.
+2. Double-click it. It installs for you alone: no administrator prompt, no
+   machine-wide changes, nothing written outside your profile.
+3. The installer puts the program in `%LOCALAPPDATA%\Programs\LocalReel`, adds a
+   Start Menu shortcut and a desktop shortcut named *LocalReel*, and registers
+   the program in **Apps & Features**.
+
+The setup program follows the Windows display language: Chinese and English
+today. Pass `/lang=zh` or `/lang=en` to override, `/S` for an unattended
+install, or `/D=<folder>` to pick another folder.
+
+Uninstalling from Apps & Features removes the program and the shortcuts but
+keeps the library. Add `/removedata` to remove the library as well.
+
+## Option B - MSI (all users)
+
+The MSI installs for every account on the machine, so it asks for administrator
+rights. Use it when several Windows accounts should share one installation.
 
 1. Download `localreel-<version>-x64.msi`.
-2. Double-click it. The wizard asks where to install:
-   - default: `%LOCALAPPDATA%\Programs\LocalReel` (per-user, no administrator rights);
-   - or **Browse…** to pick any folder you own, e.g. `D:\Apps\LocalReel`.
-3. Finish the wizard. A Start Menu shortcut and a desktop shortcut named
-   *LocalReel* are created; both run `localreel-desktop.exe`, a GUI-subsystem
-   launcher that starts the server without showing a console window.
-
-Unattended installs can pass the folder explicitly:
+2. Double-click it and pick a folder (default `%LOCALAPPDATA%\Programs\LocalReel`).
+3. Unattended installs can pass the folder explicitly:
 
 ```powershell
 msiexec /i localreel-0.5.0-x64.msi INSTALLFOLDER="D:\Apps\LocalReel" /qn
 ```
 
-Because the package is per-user, do not pick a location that needs
-administrator rights (such as `C:\Program Files`).
+Windows Installer cannot keep this package per-user when an administrator runs
+it: it registers machine-wide. For a strictly per-user install use Option A.
 
 ### "Could not set file security for file 'X:\Config.Msi\....rbf'"
 
@@ -87,7 +100,7 @@ Pick one:
 
 The message names the volume that needs this and is not specific to LocalReel.
 
-## Option B — portable zip
+## Option C - portable zip
 
 ```powershell
 # extract the zip, then from inside it:
@@ -153,6 +166,10 @@ Override with `LOCALREEL_DATA_DIR`, `LOCALREEL_LOG_DIR`, `LOCALREEL_CONFIG`,
 
 ## Upgrade and uninstall
 
+- **per-user setup**: install a newer `*-setup.exe` over the old one; it replaces
+  the program and keeps the library. Apps & Features removes it, or run
+  `localreel-setup.exe /uninstall` from the install folder. Add `/removedata` to
+  remove the library too.
 - **MSI**: installing a newer version upgrades in place (data is untouched).
   `msiexec /x localreel-<version>-x64.msi` uninstalls the program; the untracked
   `data\` folder is kept.

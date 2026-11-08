@@ -9,6 +9,7 @@ param(
     [string]$Profile = 'release',
     [switch]$SkipBuild,
     [switch]$SkipWeb,
+    [switch]$SkipSetup,
     [switch]$BuildMsi,
     [string]$FfmpegDir,
     # Package even when component versions disagree with components.json.
@@ -241,6 +242,16 @@ $hash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant
 Set-Content -LiteralPath "$zip.sha256" -Value "$hash  $($zipInfo.Name)" -Encoding ASCII
 Write-Host "package: $($zipInfo.FullName) ($([math]::Round($zipInfo.Length / 1MB, 1)) MiB)"
 Write-Host "sha256:  $hash"
+
+# --- per-user setup (default) ------------------------------------------------
+# Windows Installer cannot keep a per-user install per-user once an
+# administrator runs it, so the recommended download is an installer that does
+# the per-user work itself. Building it is cheap: the payload is the zip above.
+if (-not $SkipSetup) {
+    Write-Host 'building per-user setup...'
+    & (Join-Path $PSScriptRoot 'build-setup.ps1') -Stage $stage -Version $version
+    if ($LASTEXITCODE -ne 0) { throw 'setup build failed' }
+}
 
 # --- optional MSI ------------------------------------------------------------
 if ($BuildMsi) {

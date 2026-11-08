@@ -4,3 +4,6 @@ dist/
 # local scratch
 *.log
 
+
+# setup installer build output
+installer/setup/target/
