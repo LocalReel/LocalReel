@@ -488,6 +488,13 @@ jobs:
     timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
+      # The notes are a file in this repository, so this job needs its own
+      # checkout: every other job clones the product for a build, but this one
+      # only collects artifacts and used to publish the pointer text instead of
+      # docs/release/v<version>.md.
+      - uses: actions/checkout@v4
+        with:
+          path: product
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
@@ -507,12 +514,14 @@ jobs:
         run: |
           set -euo pipefail
           version="${{ needs.version.outputs.version }}"
-          notes="docs/release/v${version}.md"
+          notes="product/docs/release/v${version}.md"
           if [ -f "$notes" ]; then
             cp "$notes" release-notes.md
           else
+            echo "::warning::no notes at $notes; publishing the fallback text"
             printf 'LocalReel %s\n\nSee docs/install.md for the packages of each platform.\n' "$version" > release-notes.md
           fi
+          echo "release-notes.md: $(wc -c < release-notes.md) bytes"
           head -5 release-notes.md
       - uses: softprops/action-gh-release@v2
         with:
