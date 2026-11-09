@@ -45,6 +45,9 @@ function serverCandidates({ env = process.env, appPath, resourcesPath } = {}) {
   if (appPath) {
     candidates.push(path.join(path.dirname(appPath), 'server', exe))
     candidates.push(path.join(path.dirname(appPath), exe))
+    // The installer puts the shell in `desktop\` next to the server, so the
+    // sibling above the app directory is where an installed copy lives.
+    candidates.push(path.join(path.dirname(appPath), '..', exe))
   }
   candidates.push(exe)
   return candidates

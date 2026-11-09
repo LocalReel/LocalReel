@@ -72,6 +72,16 @@ test('an explicit server path wins over the bundled ones', () => {
   assert.ok(candidates.some(candidate => candidate.includes('server')))
 })
 
+test('the installer layout is searched, where the server sits above the shell', () => {
+  const path = require('node:path')
+  const install = 'C:/Users/x/AppData/Local/Programs/LocalReel'
+  const candidates = serverCandidates({ env: {}, appPath: path.join(install, 'desktop', 'main.js') })
+  assert.ok(
+    candidates.includes(path.join(install, 'localreel.exe')),
+    'the server next to the install directory must be a candidate',
+  )
+})
+
 test('a probe that times out is a miss, not an exception', async () => {
   const fetchImpl = fakeFetch([new Error('ECONNREFUSED')])
   assert.equal(await probe(fetchImpl, 'http://127.0.0.1:1'), null)

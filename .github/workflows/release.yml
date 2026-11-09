@@ -107,6 +107,15 @@ jobs:
         working-directory: localreel-web
         run: npm ci
 
+      # The shell is packaged here, not in the product scripts: a machine
+      # without node can still build the server half, and compose.ps1 simply
+      # stages the directory when it exists.
+      - name: Package the desktop shell
+        working-directory: product/desktop
+        run: |
+          npm ci
+          npm run pack
+
       - name: Compose zip + MSI
         shell: pwsh
         run: ./product/scripts/compose.ps1 -ComponentsDir "$PWD" -BuildMsi -Force
@@ -120,8 +129,10 @@ jobs:
           if (-not (Test-Path $launcher)) { throw 'launcher missing from the package' }
           $exe = Join-Path $stage.FullName 'localreel.exe'
           if (-not (Test-Path $exe)) { throw 'server missing from the package' }
+          $shell = Join-Path $stage.FullName 'desktop\LocalReel.exe'
+          if (-not (Test-Path $shell)) { throw 'the Electron shell is missing from the package' }
           $version = & $exe --version
-          Write-Host "$version / launcher $( (Get-Item $launcher).Length ) bytes"
+          Write-Host "$version / launcher $( (Get-Item $launcher).Length ) bytes / shell $( (Get-Item $shell).Length ) bytes"
 
       - uses: actions/upload-artifact@v4
         with:
