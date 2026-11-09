@@ -30,6 +30,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot 'native.ps1')
 
 function Resolve-Tool {
     param([string]$Name, [string[]]$Fallbacks)
@@ -73,8 +74,9 @@ Write-Host "core: $core"
 Write-Host "web:  $web"
 
 # --- version check -----------------------------------------------------------
-$cargoMetadata = & $cargo metadata --no-deps --format-version 1 --manifest-path (Join-Path $core 'Cargo.toml') | ConvertFrom-Json
-if ($LASTEXITCODE -ne 0) { throw 'cargo metadata failed' }
+$cargoMetadata = Invoke-Native -Label 'cargo metadata' -Capture {
+    & $cargo metadata --no-deps --format-version 1 --manifest-path (Join-Path $core 'Cargo.toml')
+} | ConvertFrom-Json
 $serverPackage = $cargoMetadata.packages | Where-Object { $_.name -eq 'localreel-server' } | Select-Object -First 1
 if (-not $serverPackage) { throw 'could not determine localreel-server version' }
 $version = $serverPackage.version
@@ -100,8 +102,7 @@ if (-not $SkipWeb) {
     Write-Host 'building web UI...'
     Push-Location -LiteralPath $web
     try {
-        & $npm run build
-        if ($LASTEXITCODE -ne 0) { throw 'web build failed' }
+        Invoke-Native -Label 'web build' { & $npm run build }
     } finally {
         Pop-Location
     }
@@ -119,8 +120,7 @@ if (-not $SkipBuild) {
     $env:LOCALREEL_WEB_DIR = $web
     $buildArgs = @('build', '-p', 'localreel-server', '--manifest-path', (Join-Path $core 'Cargo.toml'))
     if ($Profile -eq 'release') { $buildArgs += @('--profile', 'release') }
-    & $cargo @buildArgs
-    if ($LASTEXITCODE -ne 0) { throw 'cargo build failed' }
+    Invoke-Native -Label 'cargo build' { & $cargo @buildArgs }
 }
 if (-not (Test-Path -LiteralPath $binary)) {
     throw "binary not found: $binary (run without -SkipBuild)"
@@ -229,8 +229,9 @@ The web UI is embedded in localreel.exe; no separate dist directory is needed.
 "@
 Set-Content -LiteralPath (Join-Path $stage 'README.txt') -Value $quickStart -Encoding ASCII
 
-$versionOutput = & (Join-Path $stage $exeName) --version
-if ($LASTEXITCODE -ne 0) { throw 'packaged binary failed --version' }
+$versionOutput = Invoke-Native -Label 'packaged binary --version' -Capture {
+    & (Join-Path $stage $exeName) --version
+}
 Write-Host "packaged binary: $versionOutput"
 
 # --- zip ---------------------------------------------------------------------
@@ -250,14 +251,14 @@ Write-Host "sha256:  $hash"
 if (-not $SkipSetup) {
     Write-Host 'building per-user setup...'
     & (Join-Path $PSScriptRoot 'build-setup.ps1') -Stage $stage -Version $version
-    if ($LASTEXITCODE -ne 0) { throw 'setup build failed' }
 }
 
 # --- optional MSI ------------------------------------------------------------
 if ($BuildMsi) {
     Write-Host 'building MSI...'
-    & (Join-Path $PSScriptRoot 'build-msi.ps1') -Stage $stage -Version $version
-    if ($LASTEXITCODE -ne 0) { throw 'MSI build failed' }
+    # Keep the MSI in the same directory as the zip; build-msi.ps1 otherwise
+    # defaults to <product>\dist and a custom -OutputDir would split the two.
+    & (Join-Path $PSScriptRoot 'build-msi.ps1') -Stage $stage -Version $version -Output (Join-Path $outDir "$stageName.msi")
 }
 
 # --- checksums ---------------------------------------------------------------

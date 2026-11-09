@@ -19,6 +19,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $dist = Join-Path $root 'dist'
+. (Join-Path $PSScriptRoot 'native.ps1')
 
 if (-not $Stage) {
     $candidate = Get-ChildItem -Path $dist -Directory -Filter 'localreel-*' -ErrorAction SilentlyContinue |
@@ -56,8 +57,9 @@ try {
         $env:LOCALREEL_BUILD_STAMP = (Get-Date).ToUniversalTime().ToString('yyyyMMddHHmmss')
         Push-Location $root
         try {
-            & cargo build --release --manifest-path (Join-Path $root 'installer/setup/Cargo.toml')
-            if ($LASTEXITCODE -ne 0) { throw "cargo build failed with exit $LASTEXITCODE" }
+            Invoke-Native -Label 'cargo build (setup)' {
+                & cargo build --release --manifest-path (Join-Path $root 'installer/setup/Cargo.toml')
+            }
         } finally {
             Pop-Location
         }

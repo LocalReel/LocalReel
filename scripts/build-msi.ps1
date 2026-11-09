@@ -17,6 +17,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot 'native.ps1')
 
 if (-not $Stage) {
     $candidate = Get-ChildItem -LiteralPath (Join-Path $root 'dist') -Directory -Filter 'localreel-*-x64' -ErrorAction SilentlyContinue |
@@ -63,13 +64,17 @@ function Resolve-Wix {
 $wix = Resolve-Wix
 
 $extension = 'WixToolset.UI.wixext'
-$installed = & $wix extension list -g 2>&1
-if ($LASTEXITCODE -ne 0) { throw 'wix extension list failed' }
+# `wix extension list` writes its table to stderr; with the preference at Stop
+# and the caller capturing output, that used to abort the script.
+$installed = Invoke-Native -Label 'wix extension list' -Capture {
+    & $wix extension list -g
+}
 if ($installed -notmatch [regex]::Escape($extension)) {
-    $wixVersion = (& $wix --version) -replace '\+.*$', ''
+    $wixVersion = (Invoke-Native -Label 'wix --version' -Capture { & $wix --version }) -replace '\+.*$', ''
     Write-Host "installing $extension/$wixVersion ..."
-    & $wix extension add -g "$extension/$wixVersion"
-    if ($LASTEXITCODE -ne 0) { throw "could not install $extension" }
+    Invoke-Native -Label "wix extension add $extension" {
+        & $wix extension add -g "$extension/$wixVersion"
+    }
 }
 
 if (-not $Output) {
@@ -111,15 +116,16 @@ foreach ($file in $ffmpegFiles) {
 [System.IO.File]::WriteAllText($ffmpegWxs, $builder.ToString(), (New-Object System.Text.UTF8Encoding($false)))
 
 try {
-    & $wix build (Join-Path $root 'installer\localreel.wxs') $ffmpegWxs `
-        -arch x64 `
-        -ext $extension `
-        -d "SourceDir=$Stage" `
-        -d "Version=$Version" `
-        -d "LicenseRtf=$licenseRtf" `
-        -d "IconFile=$icon" `
-        -o $Output
-    if ($LASTEXITCODE -ne 0) { throw "wix build failed with exit $LASTEXITCODE" }
+    Invoke-Native -Label 'wix build' {
+        & $wix build (Join-Path $root 'installer\localreel.wxs') $ffmpegWxs `
+            -arch x64 `
+            -ext $extension `
+            -d "SourceDir=$Stage" `
+            -d "Version=$Version" `
+            -d "LicenseRtf=$licenseRtf" `
+            -d "IconFile=$icon" `
+            -o $Output
+    }
 } finally {
     Remove-Item -LiteralPath $ffmpegWxs -Force -ErrorAction SilentlyContinue
 }
