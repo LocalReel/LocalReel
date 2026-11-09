@@ -94,7 +94,7 @@ static ZH: Text = Text {
     failed: "安装失败：{error}",
     press_enter: "按回车退出…",
     unknown_argument: "无法识别的参数：{argument}（使用 /? 查看用法）",
-    help: "用法：localreel-setup.exe [/S] [/uninstall] [/removedata] [/lang=zh|en] [/D=<目录>]",
+    help: "用法：localreel-setup.exe [/S] [/uninstall] [/removedata] [/lang=zh|en] [/D=<目录>] [/wait] [/launch]",
 };
 
 static EN: Text = Text {
@@ -119,7 +119,7 @@ static EN: Text = Text {
     failed: "Setup failed: {error}",
     press_enter: "Press Enter to close…",
     unknown_argument: "Unknown argument: {argument} (use /? for usage)",
-    help: "Usage: localreel-setup.exe [/S] [/uninstall] [/removedata] [/lang=zh|en] [/D=<dir>]",
+    help: "Usage: localreel-setup.exe [/S] [/uninstall] [/removedata] [/lang=zh|en] [/D=<dir>] [/wait] [/launch]",
 };
 
 impl Text {

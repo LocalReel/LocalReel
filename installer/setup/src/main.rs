@@ -49,6 +49,13 @@ mod run {
         uninstall: bool,
         remove_data: bool,
         launch: bool,
+        /// Wait for a running installation to exit before replacing it. The
+        /// in-app updater hands over to this installer and then stops the
+        /// server, so the wait is what makes the swap possible.
+        wait: bool,
+        /// Launch even when silent. A plain `/S` install stays quiet and does
+        /// not start anything; an update wants the program back afterwards.
+        force_launch: bool,
         install_dir: PathBuf,
     }
 
@@ -60,6 +67,8 @@ mod run {
                 uninstall: false,
                 remove_data: false,
                 launch: true,
+                wait: false,
+                force_launch: false,
                 install_dir: win::invocation_install_dir(),
             };
             let mut args = args.peekable();
@@ -70,6 +79,8 @@ mod run {
                     "/uninstall" | "--uninstall" => options.uninstall = true,
                     "/removedata" | "--removedata" => options.remove_data = true,
                     "/nolaunch" | "--nolaunch" => options.launch = false,
+                    "/launch" | "--launch" => options.force_launch = true,
+                    "/wait" | "--wait" => options.wait = true,
                     value if value.starts_with("/lang=") || value.starts_with("--lang=") => {
                         let raw = value.split_once('=').map(|(_, value)| value).unwrap_or("");
                         options.lang = Lang::parse(raw)
@@ -158,6 +169,15 @@ mod run {
             println!();
         }
 
+        if options.wait && win::is_running(target) {
+            // The in-app updater stops the server right after starting this
+            // installer; give it a couple of minutes to actually exit before
+            // reporting the usual "close it and try again".
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
+            while win::is_running(target) && std::time::Instant::now() < deadline {
+                std::thread::sleep(std::time::Duration::from_millis(250));
+            }
+        }
         if win::is_running(target) {
             println!("{}", text.busy);
             return pause_exit(text, 1);
@@ -180,7 +200,10 @@ mod run {
             text.format(text.done, &[("version", VERSION)])
         );
 
-        if options.launch && !options.silent && confirm(text.launch_question, true) {
+        let launch = options.launch
+            && (options.force_launch
+                || (!options.silent && confirm(text.launch_question, true)));
+        if launch {
             let launcher = target.join("localreel-desktop.exe");
             let launcher = if launcher.is_file() {
                 launcher

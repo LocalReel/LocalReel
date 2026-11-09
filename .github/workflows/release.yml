@@ -523,11 +523,62 @@ jobs:
           fi
           echo "release-notes.md: $(wc -c < release-notes.md) bytes"
           head -5 release-notes.md
+      # The in-app updater reads this file, and only accepts it when the
+      # detached signature verifies against the public key compiled into the
+      # binary (crates/localreel-update/pubkey.txt). Losing the secret means
+      # losing in-app updates for this release, so fail loudly instead of
+      # shipping artifacts nobody can install automatically.
+      - name: Signed update manifest
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          version="${{ needs.version.outputs.version }}"
+          if [ -z "${UPDATE_SIGNING_KEY:-}" ]; then
+            echo "::error::UPDATE_SIGNING_KEY is not set; without it there is no signed update.json"
+            exit 1
+          fi
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/download/v${version}"
+          entries=()
+          add() {
+            local platform="$1" kind="$2" file="$3"
+            [ -f "$file" ] || return 0
+            local size sha
+            size="$(stat -c%s "$file")"
+            sha="$(sha256sum "$file" | cut -d' ' -f1)"
+            entries+=("$(jq -nc --arg p "$platform" --arg k "$kind" --arg u "$base/$file" \
+              --argjson s "$size" --arg h "$sha" \
+              '{platform:$p,kind:$k,url:$u,size:$s,sha256:$h}')")
+          }
+          add windows-x64 setup   "localreel-${version}-x64-setup.exe"
+          add windows-x64 msi     "localreel-${version}-x64.msi"
+          add windows-x64 zip     "localreel-${version}-x64.zip"
+          add linux-x64   tarball "localreel-${version}-x86_64.tar.gz"
+          add linux-x64   deb     "localreel_${version}_amd64.deb"
+          add linux-x64   appimage "localreel-${version}-x86_64.AppImage"
+          add macos-arm64 dmg     "localreel-${version}-arm64.dmg"
+          assets="[$(IFS=,; echo "${entries[*]}")]"
+          # `min_version` is the oldest release that may jump straight here.
+          # 0.5.6 is the first one with the updater, so nothing older can act
+          # on this file anyway; raise it only when a migration needs it.
+          notes="https://github.com/${GITHUB_REPOSITORY}/releases/tag/v${version}"
+          jq -n --arg v "$version" --arg notes "$notes" \
+            --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson a "$assets" \
+            '{version:$v, channel:"stable", min_version:"0.5.6",
+              notes_url:$notes, published_at:$at, assets:$a}' > update.json
+          printf '%s' "$UPDATE_SIGNING_KEY" > signing.pem
+          openssl pkeyutl -sign -inkey signing.pem -rawin -in update.json -out signature.bin
+          xxd -p -c 256 signature.bin > update.json.sig
+          rm -f signing.pem signature.bin
+          echo "update.json: $(wc -c < update.json) bytes, ${#entries[@]} assets"
+          cat update.json
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.version.outputs.version }}
           body_path: release-notes.md
           files: |
+            update.json
+            update.json.sig
             *-setup.exe
             *.zip
             *.msi
