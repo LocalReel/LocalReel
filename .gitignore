@@ -12,3 +12,7 @@ installer/setup/target/
 desktop/node_modules/
 desktop/out/
 desktop/*.png
+desktop/*.txt
+# the server binary is copied in before packaging, never committed
+desktop/resources/server/*
+!desktop/resources/server/.gitkeep

@@ -1,0 +1,46 @@
+appId: dev.localreel.desktop
+productName: LocalReel
+copyright: Copyright © LocalReel
+
+# The shell is one window onto a server that ships in the same installer, so the
+# first (and for now only) target is an unpacked directory: the WiX installer
+# harvests it instead of nesting a second installer inside the first.
+directories:
+  output: out
+  buildResources: build
+
+files:
+  - src/**/*
+  - package.json
+  - README.md
+
+asar: true
+
+# The server binary is copied here by scripts/compose.ps1 before packaging
+# (`<repo>/dist/localreel.exe`). Leaving it out of this file means a desktop-only
+# build still works on a machine that has the server on PATH.
+extraResources:
+  - from: resources/server
+    to: server
+    filter:
+      - "**/*"
+
+win:
+  target:
+    - target: dir
+      arch:
+        - x64
+  # No certificate is available to CI, and the installer itself is unsigned for
+  # the same reason; a self-signed binary would only teach people to click past
+  # warnings.
+  signAndEditExecutable: false
+
+linux:
+  target:
+    - dir
+  category: AudioVideo
+
+mac:
+  target:
+    - dir
+  category: public.app-category.video

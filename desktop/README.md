@@ -38,6 +38,26 @@ npm test
 server the window points at, when the shell may stop it, and the ordering that
 lets an installer replace files.
 
+## Packaging
+
+```powershell
+# 1. put the server where the shell will look for it
+copy ..\dist\localreel.exe resources\server\localreel.exe
+# 2. build an unpacked app directory (the WiX installer harvests this)
+npm run pack
+```
+
+`npm run pack` writes `out\win-unpacked\` — `LocalReel.exe` plus
+`resources\app.asar` and `resources\server\localreel.exe`. The shell looks in
+`<resources>\server` first, so the packaged app starts its own server on a
+machine that has never run LocalReel, and attaches to an already running one
+when there is one.
+
+The WiX installer is still the thing users run: it places the server, the web
+assets and this directory, and its shortcuts point at `LocalReel.exe`. Wiring
+that into `scripts/compose.ps1` is the remaining step; today the directory is
+built by hand.
+
 ## Updates
 
 There is no `electron-updater` here on purpose. The server signs and verifies its
