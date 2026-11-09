@@ -1,0 +1,15 @@
+{
+  "name": "localreel-desktop",
+  "productName": "LocalReel",
+  "version": "0.5.6",
+  "description": "Desktop shell for a LocalReel library: one window onto the server that is already on this machine",
+  "private": true,
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "electron": "44.9.0"
+  }
+}

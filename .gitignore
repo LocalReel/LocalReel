@@ -7,3 +7,8 @@ dist/
 
 # setup installer build output
 installer/setup/target/
+
+# desktop shell dependencies and local artifacts
+desktop/node_modules/
+desktop/out/
+desktop/*.png
