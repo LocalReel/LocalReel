@@ -115,19 +115,44 @@ foreach ($file in $ffmpegFiles) {
 [void]$builder.AppendLine('</Wix>')
 [System.IO.File]::WriteAllText($ffmpegWxs, $builder.ToString(), (New-Object System.Text.UTF8Encoding($false)))
 
+# Desktop shell payload. When the staged product carries one, the shortcuts
+# point at it and every file is harvested; otherwise the installer keeps the
+# console-less launcher and the component group stays empty, so a product-only
+# build still works.
+$desktopDir = Join-Path $Stage 'desktop'
+$desktopWxs = Join-Path ([System.IO.Path]::GetTempPath()) ("localreel-desktop-" + [guid]::NewGuid().ToString('N') + ".wxs")
+if (Test-Path -LiteralPath (Join-Path $desktopDir 'LocalReel.exe')) {
+    & (Join-Path $PSScriptRoot 'harvest-desktop.ps1') -Root $desktopDir -Out $desktopWxs
+    $launcherExe = 'desktop\LocalReel.exe'
+    Write-Host "desktop shell: shipping $((Get-ChildItem -LiteralPath $desktopDir -Recurse -File).Count) files"
+} else {
+    $empty = @'
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Fragment>
+    <ComponentGroup Id="DesktopComponents" />
+  </Fragment>
+</Wix>
+'@
+    [System.IO.File]::WriteAllText($desktopWxs, $empty, (New-Object System.Text.UTF8Encoding($false)))
+    $launcherExe = 'localreel-desktop.exe'
+    Write-Host 'desktop shell: not staged, shortcuts stay on the console-less launcher'
+}
+
 try {
     Invoke-Native -Label 'wix build' {
-        & $wix build (Join-Path $root 'installer\localreel.wxs') $ffmpegWxs `
+        & $wix build (Join-Path $root 'installer\localreel.wxs') $ffmpegWxs $desktopWxs `
             -arch x64 `
             -ext $extension `
             -d "SourceDir=$Stage" `
             -d "Version=$Version" `
             -d "LicenseRtf=$licenseRtf" `
             -d "IconFile=$icon" `
+            -d "LauncherExe=$launcherExe" `
             -o $Output
     }
 } finally {
     Remove-Item -LiteralPath $ffmpegWxs -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $desktopWxs -Force -ErrorAction SilentlyContinue
 }
 
 $info = Get-Item -LiteralPath $Output

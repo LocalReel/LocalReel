@@ -146,6 +146,17 @@ if ($exeName -eq 'localreel.exe') {
     }
     Copy-Item -LiteralPath $launcher -Destination (Join-Path $stage 'localreel-desktop.exe')
 }
+
+# Desktop shell: the Electron app is packaged on its own (`npm run pack` in
+# desktop\), because that needs node and a 300 MB download. When a packaged
+# shell is there it rides along, and build-msi.ps1 points the shortcuts at it.
+$desktopPayload = Join-Path $root 'desktop\out\win-unpacked'
+if (Test-Path -LiteralPath (Join-Path $desktopPayload 'LocalReel.exe')) {
+    Copy-Item -LiteralPath $desktopPayload -Destination (Join-Path $stage 'desktop') -Recurse
+    Write-Host 'staged the desktop shell'
+} else {
+    Write-Warning 'desktop shell not packaged; run "npm run pack" in desktop\ to include it'
+}
 Copy-Item -LiteralPath (Join-Path $core 'localreel.toml.example') -Destination $stage
 Copy-Item -LiteralPath (Join-Path $root 'LICENSE') -Destination $stage
 Copy-Item -LiteralPath (Join-Path $root 'README.md') -Destination $stage
