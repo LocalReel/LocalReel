@@ -16,6 +16,14 @@ files:
 
 asar: true
 
+# Chromium ships 55 locale packs (~48 MB unpacked) and the app uses two: the
+# rest never loads and only makes the installer bigger. This is the one trim
+# that costs nothing at runtime — the binary, ICU data and the paks are what
+# Chromium actually needs.
+electronLanguages:
+  - en-US
+  - zh-CN
+
 # The server binary is copied here by scripts/compose.ps1 before packaging
 # (`<repo>/dist/localreel.exe`). Leaving it out of this file means a desktop-only
 # build still works on a machine that has the server on PATH.

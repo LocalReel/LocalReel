@@ -40,6 +40,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.resolve.outputs.version }}
+      core_ref: ${{ steps.resolve.outputs.core_ref }}
+      web_ref: ${{ steps.resolve.outputs.web_ref }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -61,6 +63,24 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
+          # A release tag must build exactly the commits components.json names.
+          # Building `main` made the same tag produce different binaries on
+          # different days, which is the one thing a release must not do.
+          core_ref="$(jq -r '.components.core.commit // empty' product/components.json)"
+          web_ref="$(jq -r '.components.web.commit // empty' product/components.json)"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            if [[ -z "$core_ref" || -z "$web_ref" ]]; then
+              echo "components.json must pin a commit for every component before tagging;" >&2
+              echo "run scripts/pin-components.ps1 and commit the result." >&2
+              exit 1
+            fi
+          fi
+          core_ref="${core_ref:-main}"
+          web_ref="${web_ref:-main}"
+          echo "core_ref=$core_ref" >> "$GITHUB_OUTPUT"
+          echo "web_ref=$web_ref" >> "$GITHUB_OUTPUT"
+          echo "building core=$core_ref web=$web_ref version=$version"
+
   windows:
     name: windows
     needs: version
@@ -76,11 +96,13 @@ jobs:
         with:
           repository: ${{ env.ORG }}/localreel-core
           token: ${{ secrets.COMPONENTS_TOKEN || github.token }}
+          ref: ${{ needs.version.outputs.core_ref }}
           path: localreel-core
       - uses: actions/checkout@v4
         with:
           repository: ${{ env.ORG }}/localreel-web
           token: ${{ secrets.COMPONENTS_TOKEN || github.token }}
+          ref: ${{ needs.version.outputs.web_ref }}
           path: localreel-web
 
       - uses: actions/setup-node@v4
@@ -159,11 +181,13 @@ jobs:
         with:
           repository: ${{ env.ORG }}/localreel-core
           token: ${{ secrets.COMPONENTS_TOKEN || github.token }}
+          ref: ${{ needs.version.outputs.core_ref }}
           path: localreel-core
       - uses: actions/checkout@v4
         with:
           repository: ${{ env.ORG }}/localreel-web
           token: ${{ secrets.COMPONENTS_TOKEN || github.token }}
+          ref: ${{ needs.version.outputs.web_ref }}
           path: localreel-web
 
       - uses: actions/setup-node@v4
@@ -246,11 +270,13 @@ jobs:
         with:
           repository: ${{ env.ORG }}/localreel-core
           token: ${{ secrets.COMPONENTS_TOKEN || github.token }}
+          ref: ${{ needs.version.outputs.core_ref }}
           path: localreel-core
       - uses: actions/checkout@v4
         with:
           repository: ${{ env.ORG }}/localreel-web
           token: ${{ secrets.COMPONENTS_TOKEN || github.token }}
+          ref: ${{ needs.version.outputs.web_ref }}
           path: localreel-web
 
       - uses: actions/setup-node@v4
@@ -330,11 +356,13 @@ jobs:
         with:
           repository: ${{ env.ORG }}/localreel-core
           token: ${{ secrets.COMPONENTS_TOKEN || github.token }}
+          ref: ${{ needs.version.outputs.core_ref }}
           path: localreel-core
       - uses: actions/checkout@v4
         with:
           repository: ${{ env.ORG }}/localreel-web
           token: ${{ secrets.COMPONENTS_TOKEN || github.token }}
+          ref: ${{ needs.version.outputs.web_ref }}
           path: localreel-web
 
       - uses: actions/setup-node@v4
@@ -391,11 +419,13 @@ jobs:
         with:
           repository: ${{ env.ORG }}/localreel-core
           token: ${{ secrets.COMPONENTS_TOKEN || github.token }}
+          ref: ${{ needs.version.outputs.core_ref }}
           path: localreel-core
       - uses: actions/checkout@v4
         with:
           repository: ${{ env.ORG }}/localreel-web
           token: ${{ secrets.COMPONENTS_TOKEN || github.token }}
+          ref: ${{ needs.version.outputs.web_ref }}
           path: localreel-web
 
       - uses: docker/setup-buildx-action@v3
@@ -450,11 +480,13 @@ jobs:
         with:
           repository: ${{ env.ORG }}/localreel-core
           token: ${{ secrets.COMPONENTS_TOKEN || github.token }}
+          ref: ${{ needs.version.outputs.core_ref }}
           path: localreel-core
       - uses: actions/checkout@v4
         with:
           repository: ${{ env.ORG }}/localreel-web
           token: ${{ secrets.COMPONENTS_TOKEN || github.token }}
+          ref: ${{ needs.version.outputs.web_ref }}
           path: localreel-web
 
       - uses: docker/setup-buildx-action@v3

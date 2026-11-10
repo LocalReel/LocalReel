@@ -6,12 +6,27 @@ installers or release zips; they are consumed here.
 
 ## Composition contract
 
-`components.json` pins which component versions belong to the product:
+`components.json` pins which component versions belong to the product, and — for
+a release — the exact commits:
 
 ```json
-{ "core": { "path": "../localreel-core", "version": "0.4.1" },
-  "web":  { "path": "../localreel-web",  "version": "0.4.1" } }
+{ "core": { "path": "../localreel-core", "version": "0.5.6",
+            "commit": "3fc2cfdc61e7ce4dc3f0947c1b042dd97300fc00" },
+  "web":  { "path": "../localreel-web",  "version": "0.5.6",
+            "commit": "a4be10d92282be106b390b888e852e6b992a87b7" } }
 ```
+
+The release workflow checks out those commits. A tag whose components are not
+pinned fails immediately: building `main` meant the same tag could produce
+different binaries on different days. Pin with:
+
+```powershell
+pwsh -File scripts/pin-components.ps1 -Version 0.5.7
+```
+
+which reads `HEAD` from each component checkout, writes both fields and leaves a
+readable diff to commit before tagging. A `workflow_dispatch` run may leave the
+commits out; it then builds `main` and never publishes.
 
 `scripts/compose.ps1` resolves the checkouts (by `path`, by sibling directory,
 or via `-CoreDir`/`-WebDir`/`-ComponentsDir`), verifies the versions, builds the
