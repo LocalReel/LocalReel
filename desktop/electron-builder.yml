@@ -38,10 +38,11 @@ win:
     - target: dir
       arch:
         - x64
-  # No certificate is available to CI, and the installer itself is unsigned for
-  # the same reason; a self-signed binary would only teach people to click past
-  # warnings.
-  signAndEditExecutable: false
+  # There is no code-signing certificate, and a self-signed binary would only
+  # teach people to click past warnings. `signExecutable: false` skips the
+  # signature but keeps rcedit, so the exe still carries the product icon and
+  # version resource — without it, Explorer calls the app "Electron".
+  signExecutable: false
 
 linux:
   # A distributable shell: the server itself is installed by the .deb/.tar.gz,
