@@ -2,6 +2,9 @@ param(
     [string]$Stage,
     [string]$Version,
     [string]$Output,
+    # `desktop` also installs the Electron shell; `server` does not. Defaults to
+    # whichever the stage contains, so an old compose invocation keeps working.
+    [ValidateSet('auto', 'server', 'desktop')][string]$Edition = 'auto',
     [switch]$SkipValidation
 )
 
@@ -120,11 +123,37 @@ foreach ($file in $ffmpegFiles) {
 # console-less launcher and the component group stays empty, so a product-only
 # build still works.
 $desktopDir = Join-Path $Stage 'desktop'
+$hasDesktop = Test-Path -LiteralPath (Join-Path $desktopDir 'LocalReel.exe')
+if ($Edition -eq 'auto') {
+    $Edition = if ($hasDesktop) { 'desktop' } else { 'server' }
+}
+if ($Edition -eq 'desktop' -and -not $hasDesktop) {
+    throw "the desktop edition needs the shell in $desktopDir; run 'npm run pack' in desktop\ and re-compose"
+}
+
+# The two editions are separate products that share an install folder, so each
+# names the other for the upgrade table and the two can replace one another.
+$serverUpgradeCode = '58A5C330-4BBB-475F-B6D2-58C0699B7551'
+$desktopUpgradeCode = '8F1C5B52-6C3E-4A0D-9A64-0C7B6D2E9F31'
+if ($Edition -eq 'desktop') {
+    $upgradeCode = $desktopUpgradeCode
+    $otherUpgradeCode = $serverUpgradeCode
+    $productName = 'LocalReel Desktop'
+} else {
+    $upgradeCode = $serverUpgradeCode
+    $otherUpgradeCode = $desktopUpgradeCode
+    $productName = 'LocalReel'
+}
+if (-not $Output) {
+    $suffix = if ($Edition -eq 'desktop') { '-desktop' } else { '' }
+    $Output = Join-Path $root "dist\localreel-$Version-x64$suffix.msi"
+}
+
 $desktopWxs = Join-Path ([System.IO.Path]::GetTempPath()) ("localreel-desktop-" + [guid]::NewGuid().ToString('N') + ".wxs")
-if (Test-Path -LiteralPath (Join-Path $desktopDir 'LocalReel.exe')) {
+if ($Edition -eq 'desktop') {
     & (Join-Path $PSScriptRoot 'harvest-desktop.ps1') -Root $desktopDir -Out $desktopWxs
     $launcherExe = 'desktop\LocalReel.exe'
-    Write-Host "desktop shell: shipping $((Get-ChildItem -LiteralPath $desktopDir -Recurse -File).Count) files"
+    Write-Host "edition: desktop ($productName), shipping $((Get-ChildItem -LiteralPath $desktopDir -Recurse -File).Count) shell files"
 } else {
     $empty = @'
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
@@ -135,7 +164,7 @@ if (Test-Path -LiteralPath (Join-Path $desktopDir 'LocalReel.exe')) {
 '@
     [System.IO.File]::WriteAllText($desktopWxs, $empty, (New-Object System.Text.UTF8Encoding($false)))
     $launcherExe = 'localreel-desktop.exe'
-    Write-Host 'desktop shell: not staged, shortcuts stay on the console-less launcher'
+    Write-Host "edition: server ($productName), shortcuts stay on the console-less launcher"
 }
 
 try {
@@ -145,6 +174,9 @@ try {
             -ext $extension `
             -d "SourceDir=$Stage" `
             -d "Version=$Version" `
+            -d "ProductName=$productName" `
+            -d "UpgradeCode=$upgradeCode" `
+            -d "OtherUpgradeCode=$otherUpgradeCode" `
             -d "LicenseRtf=$licenseRtf" `
             -d "IconFile=$icon" `
             -d "LauncherExe=$launcherExe" `

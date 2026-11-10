@@ -1,0 +1,87 @@
+name: smoke
+
+# Nightly check that the components on `main` still build the product.
+#
+# The release workflow builds pinned commits, which is what a release needs and
+# exactly what makes drift invisible: a component can break the product build for
+# days and nobody notices until someone tags. This job builds `main` every night
+# and stops at a ZIP, so it costs minutes rather than a release.
+#
+# It never publishes anything.
+
+on:
+  schedule:
+    - cron: '0 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: smoke
+  cancel-in-progress: true
+
+env:
+  ORG: LocalReel
+
+jobs:
+  build:
+    name: build main
+    timeout-minutes: 40
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: product
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.ORG }}/localreel-core
+          token: ${{ secrets.COMPONENTS_TOKEN || github.token }}
+          path: localreel-core
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.ORG }}/localreel-web
+          token: ${{ secrets.COMPONENTS_TOKEN || github.token }}
+          path: localreel-web
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: localreel-web/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            localreel-core
+            product/installer/setup
+
+      - name: Install web dependencies
+        working-directory: localreel-web
+        run: npm ci
+
+      - name: Package the desktop shell
+        working-directory: product/desktop
+        run: |
+          npm ci
+          npm run pack
+
+      - name: Compose the product
+        shell: pwsh
+        run: ./product/scripts/compose.ps1 -ComponentsDir "$PWD" -Force
+
+      - name: Assert the package is complete
+        shell: pwsh
+        run: |
+          $stage = Get-ChildItem product/dist -Directory -Filter 'localreel-*-x64' | Select-Object -First 1
+          if (-not $stage) { throw 'no staged package' }
+          foreach ($required in @('localreel.exe', 'localreel-desktop.exe', 'docs', 'desktop\LocalReel.exe')) {
+            $path = Join-Path $stage.FullName $required
+            if (-not (Test-Path -LiteralPath $path)) { throw "missing from the package: $required" }
+          }
+          $exe = Join-Path $stage.FullName 'localreel.exe'
+          & $exe --version
+          Write-Host "stage ok: $($stage.Name)"

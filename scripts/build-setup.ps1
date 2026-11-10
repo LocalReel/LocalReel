@@ -4,6 +4,9 @@ param(
     # Output path; defaults to dist/localreel-<version>-x64-setup.exe
     [string]$Output,
     [string]$Version,
+    # Names to leave out of the embedded payload. The server edition uses this
+    # to skip `desktop`, so the thin installer does not carry 300 MB of Chromium.
+    [string[]]$Exclude = @(),
     [switch]$SkipBuild
 )
 
@@ -47,7 +50,21 @@ if (-not $Output) {
 $payload = Join-Path ([System.IO.Path]::GetTempPath()) ("localreel-payload-" + [guid]::NewGuid() + '.zip')
 try {
     Write-Host "staging payload from $Stage ..."
-    Compress-Archive -Path (Join-Path $Stage '*') -DestinationPath $payload -CompressionLevel Optimal -Force
+    if ($Exclude.Count -gt 0) {
+        # Compress-Archive has no exclude switch, so stage a filtered copy.
+        $filtered = Join-Path ([System.IO.Path]::GetTempPath()) ("localreel-payload-src-" + [guid]::NewGuid())
+        New-Item -ItemType Directory -Path $filtered | Out-Null
+        try {
+            Get-ChildItem -LiteralPath $Stage | Where-Object { $Exclude -notcontains $_.Name } | ForEach-Object {
+                Copy-Item -LiteralPath $_.FullName -Destination $filtered -Recurse
+            }
+            Compress-Archive -Path (Join-Path $filtered '*') -DestinationPath $payload -CompressionLevel Optimal -Force
+        } finally {
+            Remove-Item -LiteralPath $filtered -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    } else {
+        Compress-Archive -Path (Join-Path $Stage '*') -DestinationPath $payload -CompressionLevel Optimal -Force
+    }
     if (-not (Test-Path $payload)) { throw 'payload archive was not created' }
     Write-Host ("payload: {0:N1} MiB" -f ((Get-Item $payload).Length / 1MB))
 

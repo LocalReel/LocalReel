@@ -162,8 +162,10 @@ jobs:
           name: windows
           path: |
             product/dist/localreel-*-x64-setup.exe
+            product/dist/localreel-*-x64-desktop-setup.exe
             product/dist/localreel-*-x64.zip
             product/dist/localreel-*-x64.msi
+            product/dist/localreel-*-x64-desktop.msi
           if-no-files-found: error
 
   linux:
@@ -611,7 +613,11 @@ jobs:
               '{platform:$p,kind:$k,url:$u,size:$s,sha256:$h}')")
           }
           add windows-x64 setup   "localreel-${version}-x64-setup.exe"
+          # The desktop edition ships its own installer so an update never
+          # silently adds (or removes) 300 MB of Chromium.
+          add windows-x64 setup-desktop "localreel-${version}-x64-desktop-setup.exe"
           add windows-x64 msi     "localreel-${version}-x64.msi"
+          add windows-x64 msi-desktop "localreel-${version}-x64-desktop.msi"
           add windows-x64 zip     "localreel-${version}-x64.zip"
           add linux-x64   tarball "localreel-${version}-x86_64.tar.gz"
           add linux-x64   deb     "localreel_${version}_amd64.deb"

@@ -248,7 +248,28 @@ Write-Host "packaged binary: $versionOutput"
 # --- zip ---------------------------------------------------------------------
 $zip = Join-Path $outDir "$stageName.zip"
 if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
-Compress-Archive -LiteralPath $stage -DestinationPath $zip -CompressionLevel Optimal
+# The portable zip is the server package: the desktop edition ships as an
+# installer (it needs a Start Menu entry to be usable), and a 145 MB zip next to
+# a 6 MB one only makes the download page confusing.
+$zipRoot = $stage
+$filtered = $null
+if (Test-Path -LiteralPath (Join-Path $stage 'desktop')) {
+    $filtered = Join-Path ([System.IO.Path]::GetTempPath()) ("localreel-zip-" + [guid]::NewGuid())
+    New-Item -ItemType Directory -Path $filtered | Out-Null
+    $target = Join-Path $filtered $stageName
+    New-Item -ItemType Directory -Path $target | Out-Null
+    Get-ChildItem -LiteralPath $stage | Where-Object { $_.Name -ne 'desktop' } | ForEach-Object {
+        Copy-Item -LiteralPath $_.FullName -Destination $target -Recurse
+    }
+    $zipRoot = $target
+}
+try {
+    Compress-Archive -LiteralPath $zipRoot -DestinationPath $zip -CompressionLevel Optimal
+} finally {
+    if ($filtered -and (Test-Path -LiteralPath $filtered)) {
+        Remove-Item -LiteralPath $filtered -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
 $zipInfo = Get-Item -LiteralPath $zip
 $hash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
 Set-Content -LiteralPath "$zip.sha256" -Value "$hash  $($zipInfo.Name)" -Encoding ASCII
@@ -260,16 +281,36 @@ Write-Host "sha256:  $hash"
 # administrator runs it, so the recommended download is an installer that does
 # the per-user work itself. Building it is cheap: the payload is the zip above.
 if (-not $SkipSetup) {
-    Write-Host 'building per-user setup...'
-    & (Join-Path $PSScriptRoot 'build-setup.ps1') -Stage $stage -Version $version
+    # Two editions: the server-only installer is the thin download, and the
+    # desktop installer carries the shell. Both install the same product into
+    # the same folder; the updater picks the one that matches what is installed.
+    $hasShell = Test-Path -LiteralPath (Join-Path $stage 'desktop\LocalReel.exe')
+    Write-Host 'building per-user setup (server edition)...'
+    & (Join-Path $PSScriptRoot 'build-setup.ps1') -Stage $stage -Version $version -Exclude @('desktop') -Output (Join-Path $outDir "$stageName-setup.exe")
+    if ($hasShell) {
+        Write-Host 'building per-user setup (desktop edition)...'
+        & (Join-Path $PSScriptRoot 'build-setup.ps1') -Stage $stage -Version $version -Output (Join-Path $outDir "$stageName-desktop-setup.exe")
+    } else {
+        Write-Host 'desktop setup skipped: no shell in the stage'
+    }
 }
 
 # --- optional MSI ------------------------------------------------------------
 if ($BuildMsi) {
-    Write-Host 'building MSI...'
+    # Two editions from one stage: the server-only package stays small, and the
+    # desktop package carries the Electron shell. Installing one replaces the
+    # other, so a user can switch without uninstalling first.
+    Write-Host 'building MSI (server edition)...'
     # Keep the MSI in the same directory as the zip; build-msi.ps1 otherwise
     # defaults to <product>\dist and a custom -OutputDir would split the two.
-    & (Join-Path $PSScriptRoot 'build-msi.ps1') -Stage $stage -Version $version -Output (Join-Path $outDir "$stageName.msi")
+    & (Join-Path $PSScriptRoot 'build-msi.ps1') -Stage $stage -Version $version -Edition server -Output (Join-Path $outDir "$stageName.msi")
+
+    if (Test-Path -LiteralPath (Join-Path $stage 'desktop\LocalReel.exe')) {
+        Write-Host 'building MSI (desktop edition)...'
+        & (Join-Path $PSScriptRoot 'build-msi.ps1') -Stage $stage -Version $version -Edition desktop -Output (Join-Path $outDir "$stageName-desktop.msi")
+    } else {
+        Write-Host 'desktop edition skipped: no shell in the stage'
+    }
 }
 
 # --- checksums ---------------------------------------------------------------
