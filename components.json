@@ -8,14 +8,14 @@
       "path": "../localreel-core",
       "version": "0.5.6",
       "provides": "localreel-server binary (kernel + media domain + HTTP API)",
-      "commit": "3fc2cfdc61e7ce4dc3f0947c1b042dd97300fc00"
+      "commit": "e46ae0bff9aab955810447f631ccf6ea8a285f02"
     },
     "web": {
       "repository": "https://github.com/LocalReel/localreel-web.git",
       "path": "../localreel-web",
       "version": "0.5.6",
       "provides": "React UI static build (dist/) embedded by the core binary",
-      "commit": "a4be10d92282be106b390b888e852e6b992a87b7"
+      "commit": "e14d8da7e1c3eb669163e054b569c5df69bbecee"
     }
   }
 }
