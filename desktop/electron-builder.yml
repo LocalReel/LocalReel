@@ -36,11 +36,19 @@ win:
   signAndEditExecutable: false
 
 linux:
+  # A distributable shell: the server itself is installed by the .deb/.tar.gz,
+  # and the app finds it on PATH when nothing is bundled beside it.
   target:
-    - dir
+    - target: AppImage
+      arch:
+        - x64
+        - arm64
   category: AudioVideo
 
 mac:
   target:
-    - dir
+    - target: dmg
+      arch:
+        - x64
+        - arm64
   category: public.app-category.video

@@ -114,6 +114,7 @@ jobs:
         working-directory: product/desktop
         run: |
           npm ci
+          npm version "${{ needs.version.outputs.version }}" --no-git-tag-version --allow-same-version
           npm run pack
 
       - name: Compose zip + MSI
@@ -179,6 +180,13 @@ jobs:
         working-directory: localreel-web
         run: npm ci
 
+      - name: Package the desktop shell (AppImage)
+        working-directory: product/desktop
+        run: |
+          npm ci
+          npm version "${{ needs.version.outputs.version }}" --no-git-tag-version --allow-same-version
+          npm run dist -- --linux AppImage
+
       - name: Tarball (also builds the web UI and the binary)
         working-directory: product
         run: ./scripts/package-linux.sh --build-web
@@ -220,6 +228,7 @@ jobs:
             product/dist/*.tar.gz.sha256
             product/dist/*.deb
             product/dist/*.AppImage
+            product/desktop/out/*.AppImage
           if-no-files-found: error
 
   macos:
@@ -257,6 +266,13 @@ jobs:
       - name: Install web dependencies
         working-directory: localreel-web
         run: npm ci
+
+      - name: Package the desktop shell (dmg)
+        working-directory: product/desktop
+        run: |
+          npm ci
+          npm version "${{ needs.version.outputs.version }}" --no-git-tag-version --allow-same-version
+          npm run dist -- --mac dmg
 
       - name: Build .app and .dmg
         working-directory: product
@@ -296,6 +312,7 @@ jobs:
           name: macos
           path: |
             product/dist/*.dmg
+            product/desktop/out/*.dmg
           if-no-files-found: error
 
   spk:
