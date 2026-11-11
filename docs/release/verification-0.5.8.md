@@ -21,6 +21,18 @@ Not verified: the packaged installer was never executed, the Windows/GUI path wa
 not launched, macOS/Linux installers were not built locally, and the GitHub
 release job (signing key, publishing) has not run.
 
+Candidate artifacts rebuilt from the pinned commits (working tree clean):
+
+| Artifact | Size | SHA256 |
+| --- | --- | --- |
+| `localreel.exe` (server) | 16,737,792 | `E6A06D4838123C0D413B735109FAEBD8B105618FB024CBB0C87C0ADEF8DBD60B` |
+| desktop `LocalReel.exe` | 246,588,928 | `2535E0AF7D1F8976111CC58CEAE34D1DDB49D9FB0A4FDB56163E38CF20C49238` |
+| desktop setup candidate | 152,918,528 | `0BE5DB62404EB08491014345C9106E0CDB9CB8C8CCAFD8CF3B3C4558EA3DF3CD` |
+
+The packaged tree reports Electron `44.9.1` (its `version` file and a packaged
+executable probe agree); the desktop shell hash matched an earlier independent
+build, so the packaging step is reproducible. The setup executable is unsigned.
+
 ## Version and source gate
 
 Synchronize product/core/web/desktop to 0.5.8, including npm lock root versions
