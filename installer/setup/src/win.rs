@@ -126,18 +126,23 @@ pub fn shortcut_paths() -> Vec<PathBuf> {
 }
 
 /// Write one {@code .lnk} pointing at the launcher.
-pub fn create_shortcut(link: &Path, target: &Path, working_dir: &Path, description: &str) -> io::Result<()> {
+pub fn create_shortcut(
+    link: &Path,
+    target: &Path,
+    working_dir: &Path,
+    description: &str,
+) -> io::Result<()> {
     if let Some(parent) = link.parent() {
         fs::create_dir_all(parent)?;
     }
-    let mut shell_link = mslnk::ShellLink::new(target)
-        .map_err(|error| io::Error::new(io::ErrorKind::Other, error.to_string()))?;
+    let mut shell_link =
+        mslnk::ShellLink::new(target).map_err(|error| io::Error::other(error.to_string()))?;
     shell_link.set_name(Some(description.to_string()));
     shell_link.set_working_dir(Some(working_dir.to_string_lossy().into_owned()));
     shell_link.set_icon_location(Some(format!("{},0", target.display())));
     shell_link
         .create_lnk(link)
-        .map_err(|error| io::Error::new(io::ErrorKind::Other, error.to_string()))
+        .map_err(|error| io::Error::other(error.to_string()))
 }
 
 /// Register the program in Apps & Features for the current user.
@@ -156,7 +161,10 @@ pub fn register_uninstall(
         "DisplayIcon",
         &format!("{},0", install_dir.join("localreel.exe").display()),
     )?;
-    key.set_value("InstallLocation", &install_dir.to_string_lossy().to_string())?;
+    key.set_value(
+        "InstallLocation",
+        &install_dir.to_string_lossy().to_string(),
+    )?;
     key.set_value("UninstallString", &uninstall_string)?;
     key.set_value("NoModify", &1u32)?;
     key.set_value("NoRepair", &1u32)?;
@@ -194,10 +202,7 @@ pub fn detach_running_copy(install_dir: &Path) -> Option<PathBuf> {
     if !setup.is_file() {
         return None;
     }
-    let temp = std::env::temp_dir().join(format!(
-        "localreel-setup-{}.old.exe",
-        std::process::id()
-    ));
+    let temp = std::env::temp_dir().join(format!("localreel-setup-{}.old.exe", std::process::id()));
     match fs::rename(&setup, &temp) {
         Ok(()) => Some(temp),
         Err(_) => None,

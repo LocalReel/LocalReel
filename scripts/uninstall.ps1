@@ -23,6 +23,10 @@ if (-not (Test-Path -LiteralPath $InstallDir)) {
     exit 0
 }
 
+if ((Get-Item -LiteralPath $InstallDir -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) {
+    throw 'Refusing to uninstall through a linked installation directory.'
+}
+
 $manifestPath = Join-Path $InstallDir 'install.json'
 $manifest = $null
 if (Test-Path -LiteralPath $manifestPath) {
@@ -82,33 +86,28 @@ if ($RemoveData) {
         Write-Host "Removed data: $dataDir"
     }
 } else {
-    # A config file written by an older per-directory install is worth keeping:
-    # move it where the program looks for it now before the folder goes away.
-    $stale = Join-Path $InstallDir 'localreel.toml'
-    $configDir = Join-Path $env:APPDATA 'LocalReel'
-    if (Test-Path -LiteralPath $stale) {
-        New-Item -ItemType Directory -Force -Path $configDir | Out-Null
-        Copy-Item -LiteralPath $stale -Destination (Join-Path $configDir 'localreel.toml') -Force
-        Write-Host "Kept config: $(Join-Path $configDir 'localreel.toml')"
+    # Ordinary uninstall only removes owned payload files, never arbitrary
+    # directories (which may contain custom relative data paths).
+    $root = [IO.Path]::GetFullPath($InstallDir).TrimEnd('\', '/')
+    $owned = @('localreel.exe', 'localreel-desktop.exe', 'localreel-setup.exe')
+    if ($manifest -and $manifest.file_manifest_version -eq 2 -and $manifest.files) {
+        $owned = @($manifest.files)
     }
-    # A relative [data] dir resolves against the program's directory, so the
-    # library can sit inside the folder being removed. Move it aside first and
-    # put it back afterwards; deleting the program must never delete media.
-    $insideData = Join-Path $InstallDir 'data'
-    $stash = $null
-    if (Test-Path -LiteralPath $insideData) {
-        $stash = Join-Path ([System.IO.Path]::GetTempPath()) ('localreel-data-' + [guid]::NewGuid().ToString('N') + '.keep')
-        Move-Item -LiteralPath $insideData -Destination $stash
+    foreach ($relative in $owned) {
+        if ([IO.Path]::IsPathRooted($relative) -or $relative -match '(^|[\\/])\.\.([\\/]|$)' -or $relative -match '^(?i:localreel\.toml|data([\\/]|$))') { continue }
+        $path = [IO.Path]::GetFullPath((Join-Path $root $relative))
+        if (-not $path.StartsWith($root + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { continue }
+        $cursor = $path
+        $linked = $false
+        while ($cursor -and $cursor -ne $root) {
+            if (Test-Path -LiteralPath $cursor) {
+                if ((Get-Item -LiteralPath $cursor -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { $linked = $true; break }
+            }
+            $cursor = Split-Path -Parent $cursor
+        }
+        if (-not $linked -and (Test-Path -LiteralPath $path -PathType Leaf)) { Remove-Item -LiteralPath $path -Force }
     }
-    Remove-Item -LiteralPath $InstallDir -Recurse -Force
-    Write-Host "Removed program files from $InstallDir."
-    if ($stash) {
-        New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
-        Move-Item -LiteralPath $stash -Destination $insideData
-        Write-Host "Kept library inside the install folder: $insideData"
-    }
-    if (Test-Path -LiteralPath $dataDir) {
-        Write-Host "Kept data: $dataDir"
-    }
+    if (Test-Path -LiteralPath $manifestPath) { Remove-Item -LiteralPath $manifestPath -Force }
+    Write-Host "Removed owned program files; preserved other files in $InstallDir."
 }
 

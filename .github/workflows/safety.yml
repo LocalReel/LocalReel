@@ -1,0 +1,29 @@
+name: safety
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Desktop regression tests
+        working-directory: desktop
+        run: npm test
+      - name: Uninstall data safety
+        shell: pwsh
+        run: ./scripts/test-uninstall.ps1
+      - name: Installer regression tests
+        shell: pwsh
+        run: |
+          $fixture = Join-Path $env:RUNNER_TEMP 'test-payload.zip'
+          [IO.File]::WriteAllBytes($fixture, [byte[]]@(80,75,5,6,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0))
+          $env:LOCALREEL_PAYLOAD = $fixture
+          cargo test --locked --manifest-path installer/setup/Cargo.toml

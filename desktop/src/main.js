@@ -20,6 +20,7 @@ const path = require('node:path')
 const { writeFile } = require('node:fs/promises')
 
 const { ensureServer, stopServer } = require('./server')
+const { isSameOrigin } = require('./navigation')
 
 let serverChild = null
 let stopping = false
@@ -57,7 +58,7 @@ function createWindow(url) {
     return { action: 'deny' }
   })
   window.webContents.on('will-navigate', (event, target) => {
-    if (!target.startsWith(url)) {
+    if (!isSameOrigin(target, url)) {
       event.preventDefault()
       if (/^https?:/i.test(target)) void shell.openExternal(target)
     }

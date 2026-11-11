@@ -147,7 +147,9 @@ mod tests {
 
     #[test]
     fn formats_placeholders() {
-        let text = Lang::En.text().format("Installed {version}.", &[("version", "0.5.0")]);
+        let text = Lang::En
+            .text()
+            .format("Installed {version}.", &[("version", "0.5.0")]);
         assert_eq!(text, "Installed 0.5.0.");
     }
 

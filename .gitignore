@@ -3,6 +3,8 @@ dist/
 
 # local scratch
 *.log
+__pycache__/
+*.pyc
 
 
 # setup installer build output

@@ -75,7 +75,7 @@ try {
         Push-Location $root
         try {
             Invoke-Native -Label 'cargo build (setup)' {
-                & cargo build --release --manifest-path (Join-Path $root 'installer/setup/Cargo.toml')
+                & cargo build --release --locked --manifest-path (Join-Path $root 'installer/setup/Cargo.toml')
             }
         } finally {
             Pop-Location

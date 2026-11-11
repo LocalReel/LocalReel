@@ -156,6 +156,65 @@ test('a server that ignores the request is killed, and that is reported', async 
   assert.deepEqual(child.signals, ['SIGTERM', 'SIGKILL'])
 })
 
+test('spawn errors fall back to the next candidate without an uncaught error', async () => {
+  const tried = []
+  let started = false
+  const result = await ensureServer({
+    env: { LOCALREEL_SERVER: 'missing-server' },
+    resourcesPath: '/resources',
+    fetchImpl: async () => ({ ok: started, json: async () => ({ status: 'ok' }) }),
+    spawnImpl: binary => {
+      tried.push(binary)
+      const child = fakeChild()
+      if (tried.length === 1) queueMicrotask(() => child.emit('error', new Error('ENOENT')))
+      else started = true
+      return child
+    },
+    attempts: 2,
+    intervalMs: 1,
+  })
+  assert.equal(tried.length, 2)
+  assert.equal(result.health.status, 'ok')
+})
+
+test('all failed candidates produce a friendly unavailable result', async () => {
+  const result = await ensureServer({
+    env: {},
+    fetchImpl: fakeFetch(['nope']),
+    spawnImpl: () => { throw new Error('EACCES') },
+  })
+  assert.equal(result.child, null)
+  assert.equal(result.health, null)
+  assert.equal(result.spawned, false)
+})
+
+test('early process exit falls back to the next candidate', async () => {
+  let count = 0
+  const result = await ensureServer({
+    env: { LOCALREEL_SERVER: 'exits-early' },
+    fetchImpl: async () => ({ ok: count > 1, json: async () => ({ status: 'ok' }) }),
+    spawnImpl: () => {
+      count++
+      const child = fakeChild()
+      if (count === 1) queueMicrotask(() => child.emit('exit', 1))
+      return child
+    },
+    attempts: 2,
+    intervalMs: 1,
+  })
+  assert.equal(count, 2)
+  assert.equal(result.health.status, 'ok')
+})
+
+test('navigation compares exact origins rather than URL prefixes', () => {
+  const { isSameOrigin } = require('../src/navigation')
+  const base = 'http://127.0.0.1:3101'
+  assert.equal(isSameOrigin(base + '/watch/1', base), true)
+  for (const target of ['http://127.0.0.1:31010', 'http://127.0.0.1:3101@evil.example', 'https://127.0.0.1:3101', 'javascript:alert(1)', 'invalid']) {
+    assert.equal(isSameOrigin(target, base), false, target)
+  }
+})
+
 test('stopping nothing is a success, not an error', async () => {
   assert.equal(await stopServer(null), true)
   const already = fakeChild()

@@ -118,12 +118,18 @@ if (-not $SkipBuild) {
     Write-Host "building localreel-server ($Profile)..."
     # Components stay separable: the core crate reads its UI from anywhere.
     $env:LOCALREEL_WEB_DIR = $web
-    $buildArgs = @('build', '-p', 'localreel-server', '--manifest-path', (Join-Path $core 'Cargo.toml'))
+    $buildArgs = @('build', '--locked', '-p', 'localreel-server', '--manifest-path', (Join-Path $core 'Cargo.toml'))
     if ($Profile -eq 'release') { $buildArgs += @('--profile', 'release') }
     Invoke-Native -Label 'cargo build' { & $cargo @buildArgs }
 }
 if (-not (Test-Path -LiteralPath $binary)) {
     throw "binary not found: $binary (run without -SkipBuild)"
+}
+
+# A stale --SkipBuild binary must never be packaged under a new version name.
+$binaryVersion = (Invoke-Native -Label 'binary version' -Capture { & $binary --version }).Trim()
+if ($binaryVersion -ne "localreel $version") {
+    throw "binary version mismatch: expected localreel $version, got $binaryVersion; rebuild before packaging"
 }
 
 # --- stage -------------------------------------------------------------------

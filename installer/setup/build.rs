@@ -11,7 +11,8 @@ use std::fs;
 use std::path::PathBuf;
 
 fn main() {
-    let payload = env::var("LOCALREEL_PAYLOAD").expect("LOCALREEL_PAYLOAD must point at the payload zip");
+    let payload =
+        env::var("LOCALREEL_PAYLOAD").expect("LOCALREEL_PAYLOAD must point at the payload zip");
     let version = env::var("LOCALREEL_VERSION").unwrap_or_else(|_| "0.0.0".to_string());
     let payload = PathBuf::from(&payload);
     if !payload.is_file() {

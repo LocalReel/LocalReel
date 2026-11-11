@@ -8,9 +8,33 @@ paths and its CSP exactly as a browser would see them.
 ## Running it
 
 ```powershell
-npm install
+npm ci
+# Electron 44.9.1 has no postinstall hook: explicitly fetch its runtime.
+node node_modules/electron/install.js
 npm start
 ```
+
+A successful `npm ci` or `npm rebuild electron` does not prove that the runtime
+exists: Electron 44.9.1 downloads it on explicit installation or first import.
+The explicit command above uses the Electron cache and verifies its checksums;
+the Windows x64 download is approximately 151 MiB before extraction. To verify
+without opening a window or starting the LocalReel server:
+
+```powershell
+Get-Content node_modules/electron/dist/version # expected: 44.9.1
+$previous = $env:ELECTRON_RUN_AS_NODE
+try {
+    $env:ELECTRON_RUN_AS_NODE = '1'
+    & ./node_modules/electron/dist/electron.exe -p 'process.versions.electron'
+} finally {
+    $env:ELECTRON_RUN_AS_NODE = $previous
+}
+```
+
+Do not use `require('electron')` as a read-only availability check: it can start
+a download when the runtime is absent. Installing the npm package with
+`--ignore-scripts` alone is not evidence that an existing packaged application
+contains the patched runtime; rebuild and verify the packaged executable too.
 
 The shell looks for a server in this order:
 

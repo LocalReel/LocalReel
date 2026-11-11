@@ -1,7 +1,7 @@
 {
   "name": "localreel-desktop",
   "productName": "LocalReel",
-  "version": "0.5.7",
+  "version": "0.5.8",
   "description": "Desktop shell for a LocalReel library: one window onto the server that is already on this machine",
   "private": true,
   "main": "src/main.js",
@@ -12,7 +12,7 @@
     "dist": "electron-builder"
   },
   "devDependencies": {
-    "electron": "44.9.0",
+    "electron": "44.9.1",
     "electron-builder": "^26.18.0"
   }
 }

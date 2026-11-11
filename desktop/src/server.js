@@ -111,18 +111,39 @@ async function ensureServer({
   }
 
   const candidates = serverCandidates({ env, appPath, resourcesPath })
-  const binary = candidates[0]
-  log(`starting ${binary}`)
-  const child = spawnImpl(binary, ['serve'], {
-    env: { ...env, LOCALREEL_PORT: String(port) },
-    stdio: ['ignore', 'pipe', 'pipe'],
-    windowsHide: true,
-  })
-  child.stdout?.on('data', chunk => log(String(chunk).trimEnd()))
-  child.stderr?.on('data', chunk => log(String(chunk).trimEnd()))
-
-  const health = await waitForHealth(fetchImpl, url, { attempts, intervalMs })
-  return { child, spawned: true, url, health }
+  for (const binary of [...new Set(candidates)]) {
+    log(`starting ${binary}`)
+    let child
+    try {
+      child = spawnImpl(binary, ['serve'], {
+        env: { ...env, LOCALREEL_PORT: String(port) },
+        stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true,
+      })
+    } catch (error) {
+      log(`could not start ${binary}: ${error.message}`)
+      continue
+    }
+    let failed = false
+    // Keep the error listener for the child's full lifetime: errors are not
+    // necessarily accompanied by exit (ENOENT, EACCES in particular).
+    child.on('error', error => {
+      failed = true
+      log(`could not start ${binary}: ${error.message}`)
+    })
+    child.once('exit', () => { failed = true })
+    child.stdout?.on('data', chunk => log(String(chunk).trimEnd()))
+    child.stderr?.on('data', chunk => log(String(chunk).trimEnd()))
+    for (let attempt = 0; attempt < attempts && !failed; attempt += 1) {
+      const health = await probe(fetchImpl, url)
+      if (health?.status && !failed) return { child, spawned: true, url, health }
+      await new Promise(resolve => setTimeout(resolve, intervalMs))
+    }
+    // Do not start another candidate while this one is still running. Let the
+    // caller report the timeout and stop the owned process normally.
+    if (!failed) return { child, spawned: true, url, health: null }
+  }
+  return { child: null, spawned: false, url, health: null }
 }
 
 /**

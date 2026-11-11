@@ -83,13 +83,15 @@ mod run {
                     "/wait" | "--wait" => options.wait = true,
                     value if value.starts_with("/lang=") || value.starts_with("--lang=") => {
                         let raw = value.split_once('=').map(|(_, value)| value).unwrap_or("");
-                        options.lang = Lang::parse(raw)
-                            .ok_or_else(|| text.format(text.unknown_argument, &[("argument", value)]))?;
+                        options.lang = Lang::parse(raw).ok_or_else(|| {
+                            text.format(text.unknown_argument, &[("argument", value)])
+                        })?;
                     }
                     "--lang" | "/lang" => {
                         let raw = args.next().ok_or_else(|| text.help.to_string())?;
-                        options.lang = Lang::parse(&raw)
-                            .ok_or_else(|| text.format(text.unknown_argument, &[("argument", &raw)]))?;
+                        options.lang = Lang::parse(&raw).ok_or_else(|| {
+                            text.format(text.unknown_argument, &[("argument", &raw)])
+                        })?;
                     }
                     value if value.starts_with("/D=") || value.starts_with("--dir=") => {
                         let raw = value.split_once('=').map(|(_, value)| value).unwrap_or("");
@@ -136,10 +138,7 @@ mod run {
     fn install(text: &Text, options: &Options) -> ExitCode {
         let target = &options.install_dir;
         if !options.silent {
-            println!(
-                "{}",
-                text.format(text.app_title, &[("version", VERSION)])
-            );
+            println!("{}", text.format(text.app_title, &[("version", VERSION)]));
             println!();
             println!("{}", text.intro);
             println!("{}", text.per_user);
@@ -186,23 +185,22 @@ mod run {
             println!("{}", text.installing);
         }
 
-        if let Err(error) = extract(target) {
-            println!("{}", text.format(text.failed, &[("error", &error)]));
-            return pause_exit(text, 1);
-        }
-        if let Err(error) = finish_install(target) {
+        let files = match extract(target) {
+            Ok(files) => files,
+            Err(error) => {
+                println!("{}", text.format(text.failed, &[("error", &error)]));
+                return pause_exit(text, 1);
+            }
+        };
+        if let Err(error) = finish_install(target, files) {
             println!("{}", text.format(text.failed, &[("error", &error)]));
             return pause_exit(text, 1);
         }
 
-        println!(
-            "{}",
-            text.format(text.done, &[("version", VERSION)])
-        );
+        println!("{}", text.format(text.done, &[("version", VERSION)]));
 
         let launch = options.launch
-            && (options.force_launch
-                || (!options.silent && confirm(text.launch_question, true)));
+            && (options.force_launch || (!options.silent && confirm(text.launch_question, true)));
         if launch {
             let launcher = target.join("localreel-desktop.exe");
             let launcher = if launcher.is_file() {
@@ -288,11 +286,16 @@ mod run {
     /// A zip made from the stage folder wraps everything in one directory; a
     /// zip made from its contents does not. Strip a wrapper only when the
     /// archive actually has one, so both layouts install correctly.
-    fn extract(target: &Path) -> Result<(), String> {
+    fn extract(target: &Path) -> Result<Vec<String>, String> {
+        extract_payload(target, PAYLOAD)
+    }
+
+    fn extract_payload(target: &Path, payload: &[u8]) -> Result<Vec<String>, String> {
+        let mut files = Vec::new();
         fs::create_dir_all(target).map_err(|error| error.to_string())?;
-        let reader = io::Cursor::new(PAYLOAD);
-        let mut archive =
-            zip::ZipArchive::new(reader).map_err(|error| format!("payload is not a zip: {error}"))?;
+        let reader = io::Cursor::new(payload);
+        let mut archive = zip::ZipArchive::new(reader)
+            .map_err(|error| format!("payload is not a zip: {error}"))?;
         let wrapper = wrapper_folder(&mut archive);
         for index in 0..archive.len() {
             let mut entry = archive
@@ -321,21 +324,26 @@ mod run {
                 .map_err(|error| format!("{}: {error}", destination.display()))?;
             io::copy(&mut entry, &mut file)
                 .map_err(|error| format!("{}: {error}", destination.display()))?;
+            files.push(relative.to_string_lossy().replace('\\', "/"));
         }
-        if !target.join("localreel.exe").is_file() {
+        if !files.iter().any(|file| file == "localreel.exe") {
             return Err("the payload did not contain localreel.exe".to_string());
         }
-        Ok(())
+        Ok(files)
     }
 
     /// The single top-level directory every entry shares, if there is one.
-    fn wrapper_folder(archive: &mut zip::ZipArchive<io::Cursor<&'static [u8]>>) -> Option<String> {
+    fn wrapper_folder(archive: &mut zip::ZipArchive<io::Cursor<&[u8]>>) -> Option<String> {
         let mut wrapper: Option<String> = None;
         for index in 0..archive.len() {
             let entry = archive.by_index(index).ok()?;
             let name = entry.enclosed_name()?;
             let mut components = name.components();
-            let first = components.next()?.as_os_str().to_string_lossy().into_owned();
+            let first = components
+                .next()?
+                .as_os_str()
+                .to_string_lossy()
+                .into_owned();
             if components.next().is_none() && !entry.is_dir() {
                 // A top-level file means the archive is already flat.
                 return None;
@@ -350,7 +358,7 @@ mod run {
     }
 
     /// Everything after the files: manifest, uninstall entry, shortcuts.
-    fn finish_install(target: &Path) -> Result<(), String> {
+    fn finish_install(target: &Path, mut files: Vec<String>) -> Result<(), String> {
         let self_copy = target.join("localreel-setup.exe");
         if let Ok(current) = std::env::current_exe() {
             if current != self_copy {
@@ -362,10 +370,19 @@ mod run {
         // Record exactly what was written. Uninstall removes those files and
         // leaves everything else alone, so a library that the relative
         // `[data] dir` put inside the install folder survives the uninstall.
-        let files = collect_files(target);
-        let estimated_kb = directory_size_kb(target);
+        files.push("localreel-setup.exe".to_string());
+        files.sort();
+        files.dedup();
+        let estimated_kb = files
+            .iter()
+            .filter_map(|relative| safe_program_path(target, relative))
+            .filter_map(|path| fs::metadata(path).ok())
+            .map(|meta| meta.len())
+            .sum::<u64>()
+            / 1024;
         let manifest = serde_json::json!({
             "product": "LocalReel",
+            "file_manifest_version": 2,
             "version": VERSION,
             "build": BUILD_STAMP,
             "installed_at": timestamp(),
@@ -400,22 +417,10 @@ mod run {
 
     fn installed_version() -> Option<String> {
         let hkcu = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER);
-        let key = hkcu.open_subkey_with_flags(win::UNINSTALL_KEY, winreg::enums::KEY_READ).ok()?;
+        let key = hkcu
+            .open_subkey_with_flags(win::UNINSTALL_KEY, winreg::enums::KEY_READ)
+            .ok()?;
         key.get_value::<String, _>("DisplayVersion").ok()
-    }
-
-    fn directory_size_kb(path: &Path) -> u64 {
-        let mut total = 0u64;
-        if let Ok(entries) = fs::read_dir(path) {
-            for entry in entries.flatten() {
-                match entry.metadata() {
-                    Ok(metadata) if metadata.is_dir() => total += directory_size_kb(&entry.path()),
-                    Ok(metadata) => total += metadata.len(),
-                    Err(_) => {}
-                }
-            }
-        }
-        total / 1024
     }
 
     fn timestamp() -> String {
@@ -425,33 +430,40 @@ mod run {
             .unwrap_or_else(|_| "0".to_string())
     }
 
-    /// Every file below `root`, relative to it, with `/` separators. The
-    /// manifest itself is excluded: uninstall deletes it last.
-    fn collect_files(root: &Path) -> Vec<String> {
-        let mut files = Vec::new();
-        collect_files_into(root, root, &mut files);
-        files.sort();
-        files
-    }
-
-    fn collect_files_into(root: &Path, dir: &Path, files: &mut Vec<String>) {
-        let Ok(entries) = fs::read_dir(dir) else {
-            return;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            match entry.file_type() {
-                Ok(kind) if kind.is_dir() => collect_files_into(root, &path, files),
-                Ok(_) => {
-                    if let Ok(relative) = path.strip_prefix(root) {
-                        if relative != Path::new("install.json") {
-                            files.push(relative.to_string_lossy().replace('\\', "/"));
-                        }
-                    }
+    // Never traverse a symlink/junction or accept a manifest path outside the
+    // installation. Old manifests inventoried user files, so only v2 is trusted.
+    fn safe_program_path(target: &Path, relative: &str) -> Option<PathBuf> {
+        use std::os::windows::fs::MetadataExt;
+        use std::path::Component;
+        if fs::symlink_metadata(target)
+            .map(|meta| meta.file_attributes() & 0x400 != 0)
+            .unwrap_or(false)
+        {
+            return None;
+        }
+        let relative = Path::new(relative);
+        if relative.as_os_str().is_empty()
+            || relative
+                .components()
+                .any(|part| !matches!(part, Component::Normal(_)))
+        {
+            return None;
+        }
+        let lower = relative.to_string_lossy().replace('\\', "/").to_lowercase();
+        if lower == "localreel.toml" || lower.starts_with("data/") {
+            return None;
+        }
+        let mut path = target.to_path_buf();
+        for part in relative.components() {
+            path.push(part);
+            if let Ok(meta) = fs::symlink_metadata(&path) {
+                use std::os::windows::fs::MetadataExt;
+                if meta.file_attributes() & 0x400 != 0 {
+                    return None;
                 }
-                Err(_) => {}
             }
         }
+        Some(path)
     }
 
     /// Remove the files the manifest lists and any directory they leave empty.
@@ -460,10 +472,20 @@ mod run {
     /// the library lives under the install folder, and uninstalling the program
     /// must not take the household's media with it.
     fn remove_program_files(target: &Path) {
+        use std::os::windows::fs::MetadataExt;
+        if fs::symlink_metadata(target)
+            .map(|meta| meta.file_attributes() & 0x400 != 0)
+            .unwrap_or(true)
+        {
+            return;
+        }
         let listed: Vec<String> = fs::read_to_string(target.join("install.json"))
             .ok()
             .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
             .and_then(|value| {
+                if value.get("file_manifest_version").and_then(|v| v.as_u64()) != Some(2) {
+                    return None;
+                }
                 value
                     .get("files")
                     .and_then(|files| files.as_array())
@@ -477,46 +499,37 @@ mod run {
             })
             .unwrap_or_default();
 
-        if listed.is_empty() {
-            // No usable manifest: keep the library folder, drop the rest.
-            if let Ok(entries) = fs::read_dir(target) {
-                for entry in entries.flatten() {
-                    if entry.file_name() == "data" {
-                        continue;
-                    }
-                    let path = entry.path();
-                    if path.is_dir() {
-                        let _ = fs::remove_dir_all(&path);
-                    } else {
-                        let _ = fs::remove_file(&path);
-                    }
-                }
-            }
-            return;
-        }
-
+        let listed = if listed.is_empty() {
+            // Legacy manifests are polluted by user data. Prefer leftover
+            // program files to data loss; never recursively delete directories.
+            vec![
+                "localreel.exe".into(),
+                "localreel-desktop.exe".into(),
+                "localreel-setup.exe".into(),
+            ]
+        } else {
+            listed
+        };
+        let mut parents = Vec::new();
         for relative in listed {
-            let path = target.join(relative);
-            if path.starts_with(target) {
+            if let Some(path) = safe_program_path(target, &relative) {
                 let _ = fs::remove_file(&path);
+                let mut parent = path.parent();
+                while let Some(dir) = parent {
+                    if dir == target {
+                        break;
+                    }
+                    parents.push(dir.to_path_buf());
+                    parent = dir.parent();
+                }
             }
         }
         let _ = fs::remove_file(target.join("install.json"));
-        prune_empty_dirs(target);
-    }
-
-    /// Remove directories that became empty, leaving `target` itself when it
-    /// still holds something.
-    fn prune_empty_dirs(dir: &Path) {
-        let Ok(entries) = fs::read_dir(dir) else {
-            return;
-        };
-        for entry in entries.flatten() {
-            if entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false) {
-                prune_empty_dirs(&entry.path());
-            }
+        parents.sort_by_key(|path| std::cmp::Reverse(path.components().count()));
+        for parent in parents {
+            let _ = fs::remove_dir(parent);
         }
-        let _ = fs::remove_dir(dir);
+        let _ = fs::remove_dir(target);
     }
 
     fn confirm(question: &str, default_yes: bool) -> bool {
@@ -551,10 +564,7 @@ mod run {
         use super::*;
 
         fn parse(args: &[&str]) -> Result<Options, String> {
-            Options::parse(
-                args.iter().map(|value| value.to_string()),
-                Lang::En.text(),
-            )
+            Options::parse(args.iter().map(|value| value.to_string()), Lang::En.text())
         }
 
         #[test]
@@ -579,11 +589,65 @@ mod run {
         }
 
         #[test]
+        fn upgrade_records_payload_only_and_preserves_custom_library() {
+            let dir =
+                std::env::temp_dir().join(format!("localreel-upgrade-test-{}", std::process::id()));
+            assert!(
+                !dir.exists(),
+                "test directory already exists: {}",
+                dir.display()
+            );
+            fs::create_dir_all(dir.join("library")).unwrap();
+            fs::write(dir.join("library/media.mp4"), b"media").unwrap();
+            fs::write(dir.join("library/localreel.db"), b"db").unwrap();
+            fs::write(dir.join("localreel.toml"), b"[data]\ndir='library'").unwrap();
+            let mut zip = zip::ZipWriter::new(io::Cursor::new(Vec::new()));
+            zip.start_file("localreel.exe", zip::write::SimpleFileOptions::default())
+                .unwrap();
+            zip.write_all(b"program").unwrap();
+            let payload = zip.finish().unwrap().into_inner();
+            for _ in 0..2 {
+                let files = extract_payload(&dir, &payload).unwrap();
+                assert_eq!(files, vec!["localreel.exe"]);
+                fs::write(
+                    dir.join("install.json"),
+                    serde_json::json!({"file_manifest_version":2,"files":files}).to_string(),
+                )
+                .unwrap();
+            }
+            remove_program_files(&dir);
+            assert!(!dir.join("localreel.exe").exists());
+            assert_eq!(fs::read(dir.join("library/media.mp4")).unwrap(), b"media");
+            assert_eq!(fs::read(dir.join("library/localreel.db")).unwrap(), b"db");
+            assert!(dir.join("localreel.toml").is_file());
+            fs::remove_dir_all(dir).unwrap();
+        }
+
+        #[test]
+        fn polluted_legacy_manifest_and_missing_manifest_preserve_custom_files() {
+            let dir =
+                std::env::temp_dir().join(format!("localreel-legacy-test-{}", std::process::id()));
+            assert!(!dir.exists());
+            fs::create_dir_all(dir.join("library")).unwrap();
+            fs::write(dir.join("library/media.mp4"), b"media").unwrap();
+            fs::write(dir.join("localreel.exe"), b"program").unwrap();
+            fs::write(
+                dir.join("install.json"),
+                br#"{"files":["localreel.exe","library/media.mp4"]}"#,
+            )
+            .unwrap();
+            remove_program_files(&dir);
+            assert!(dir.join("library/media.mp4").exists());
+            remove_program_files(&dir);
+            assert!(dir.join("library/media.mp4").exists());
+            assert!(safe_program_path(&dir, "../outside.txt").is_none());
+            fs::remove_dir_all(dir).unwrap();
+        }
+
+        #[test]
         fn uninstall_keeps_a_library_inside_the_install_folder() {
-            let dir = std::env::temp_dir().join(format!(
-                "localreel-setup-test-{}",
-                std::process::id()
-            ));
+            let dir =
+                std::env::temp_dir().join(format!("localreel-setup-test-{}", std::process::id()));
             let _ = fs::remove_dir_all(&dir);
             fs::create_dir_all(dir.join("data")).unwrap();
             fs::write(dir.join("localreel.exe"), b"exe").unwrap();
