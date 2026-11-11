@@ -2,6 +2,14 @@ appId: dev.localreel.desktop
 productName: LocalReel
 copyright: Copyright © LocalReel
 
+# `LocalReel-<version>-arm64.dmg` next to the server's own
+# `localreel-<version>-arm64.dmg` is one case-insensitive collision away from
+# being the same release asset, which is exactly how the first 0.5.7 publish
+# failed: the uploader tried to update an asset that the other file had already
+# claimed. "Desktop" in the name makes the two entries unambiguous everywhere —
+# release page, checksums file, download page.
+artifactName: LocalReel-Desktop-${version}-${arch}.${ext}
+
 # The shell is one window onto a server that ships in the same installer, so the
 # first (and for now only) target is an unpacked directory: the WiX installer
 # harvests it instead of nesting a second installer inside the first.
