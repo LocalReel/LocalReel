@@ -17,7 +17,9 @@ The shell looks for a server in this order:
 1. `LOCALREEL_SERVER` — an explicit binary.
 2. `<resources>/server/localreel[.exe]` — a packaged app.
 3. `<next to the app>/server/localreel[.exe]`, then `<next to the app>/localreel[.exe]`.
-4. `localreel` on `PATH`.
+4. `../localreel[.exe]` — the installer layout, where the shell lives in
+   `desktop\` and the server sits one level up.
+5. `localreel` on `PATH`.
 
 If one already answers `/api/v1/health` on the port, the shell attaches to it and
 leaves it running; only a server the shell started is stopped when the window
@@ -48,15 +50,16 @@ npm run pack
 ```
 
 `npm run pack` writes `out\win-unpacked\` — `LocalReel.exe` plus
-`resources\app.asar` and `resources\server\localreel.exe`. The shell looks in
-`<resources>\server` first, so the packaged app starts its own server on a
-machine that has never run LocalReel, and attaches to an already running one
-when there is one.
+`resources\app.asar` and, when the binary was copied in first, the server under
+`resources\server`. In the release pipeline the binary is *not* copied in: the
+installer places the server one level above this directory, which is why the
+lookup above includes `../localreel.exe`.
 
-The WiX installer is still the thing users run: it places the server, the web
-assets and this directory, and its shortcuts point at `LocalReel.exe`. Wiring
-that into `scripts/compose.ps1` is the remaining step; today the directory is
-built by hand.
+The WiX installer is what users run: `scripts/compose.ps1` stages this directory
+into the product, `scripts/build-msi.ps1 -Edition desktop` harvests every file
+into components, and the shortcuts point at `desktop\LocalReel.exe`. `npm run
+dist` additionally produces a `.dmg` (macOS) and an `.AppImage` (Linux) on those
+platforms; the release workflow runs it for both.
 
 ## Updates
 
@@ -66,6 +69,11 @@ own `update.json` (ed25519), downloads the installer and hands over to
 to get out of the way: when the server exits — because it is installing — the
 window closes too, and `before-quit` waits for the child process to be gone
 before letting the app exit.
+
+Which installer it downloads depends on the edition: `localreel-update` looks for
+`setup-desktop` when `desktop/LocalReel.exe` exists beside the server, and for
+`setup` when it does not. A server installation therefore never grows a shell it
+did not ask for, and a desktop installation keeps its window across updates.
 
 ## Known environment trap
 
