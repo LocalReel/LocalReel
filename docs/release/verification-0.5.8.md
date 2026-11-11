@@ -1,7 +1,25 @@
 # 0.5.8 release verification preparation
 
-Status: prepared, **real setup/Sandbox installation has not been executed**.
-Do not infer release readiness from source tests or an npm dependency version.
+Status: source and local artifacts verified, **real setup/Sandbox installation has
+not been executed**. Do not infer release readiness from source tests or an npm
+dependency version.
+
+## Verified so far (2026-11-11)
+
+| Item | Evidence |
+| --- | --- |
+| Component CI | core / web / plugin-cli / plugin-strm `ci` green on GitHub for the pinned commits |
+| Product CI | `safety` workflow green (desktop tests, uninstall regression, installer tests) |
+| Local server candidate | `--version` prints 0.5.8; built from pinned sources with `--locked` |
+| Electron runtime | official 44.9.1 archive, SHA256 matches the published `SHASUMS256.txt` |
+| Desktop package | `electron-builder --dir` from that runtime: exe 0.5.8, packaged app reports Electron 44.9.1 |
+| Desktop setup candidate | built and hashed locally; unsigned |
+| Version gate | all ten fields match 0.5.8 (product, pins, core workspace, web/desktop package+lock) |
+| Signature gate | `test-release-gates.py` passes for correct key, wrong key and tampered manifest |
+
+Not verified: the packaged installer was never executed, the Windows/GUI path was
+not launched, macOS/Linux installers were not built locally, and the GitHub
+release job (signing key, publishing) has not run.
 
 ## Version and source gate
 
