@@ -16,8 +16,9 @@ use std::sync::{Arc, Mutex};
 
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows_sys::Win32::Graphics::Gdi::{
-    CreateFontW, GetStockObject, UpdateWindow, CLEARTYPE_QUALITY, CLIP_DEFAULT_PRECIS,
-    DEFAULT_CHARSET, DEFAULT_GUI_FONT, DEFAULT_PITCH, FF_DONTCARE, HFONT, OUT_DEFAULT_PRECIS,
+    CreateFontW, GetStockObject, GetSysColorBrush, SetBkMode, UpdateWindow, CLEARTYPE_QUALITY,
+    CLIP_DEFAULT_PRECIS, DEFAULT_CHARSET, DEFAULT_GUI_FONT, DEFAULT_PITCH, FF_DONTCARE, HDC, HFONT,
+    OUT_DEFAULT_PRECIS, TRANSPARENT,
 };
 use windows_sys::Win32::System::Com::{
     CoInitializeEx, CoTaskMemFree, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE,
@@ -39,6 +40,7 @@ use super::{perform_install, win, InstallFailure, Options, Text, VERSION};
 // Window messages and styles the standard library does not re-export for us.
 const WM_CLOSE: u32 = 0x0010;
 const WM_COMMAND: u32 = 0x0111;
+const WM_CTLCOLORSTATIC: u32 = 0x0138;
 const WM_DESTROY: u32 = 0x0002;
 const WM_SETFONT: u32 = 0x0030;
 const WM_APP: u32 = 0x8000;
@@ -506,6 +508,13 @@ unsafe extern "system" fn window_proc(
         WM_CLOSE => {
             cancel(hwnd);
             0
+        }
+        WM_CTLCOLORSTATIC => {
+            // Static controls otherwise paint the button-face grey, which shows
+            // up as boxes on the window's white background.
+            let device = wparam as HDC;
+            SetBkMode(device, TRANSPARENT as i32);
+            GetSysColorBrush(COLOR_WINDOW) as LRESULT
         }
         WM_APP_PROGRESS => {
             if let Some(state) = state(hwnd) {
