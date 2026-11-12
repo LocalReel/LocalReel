@@ -8,7 +8,7 @@
       "path": "../localreel-core",
       "version": "0.5.8",
       "provides": "localreel-server binary (kernel + media domain + HTTP API)",
-      "commit": "37602999d4c616230fb18ae8d33680e103d0f9f5"
+      "commit": "fcee25e533e14991b9b54d47dbbe75b483f19e0c"
     },
     "web": {
       "repository": "https://github.com/LocalReel/localreel-web.git",

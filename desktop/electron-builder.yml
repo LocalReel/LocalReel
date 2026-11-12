@@ -46,6 +46,9 @@ win:
     - target: dir
       arch:
         - x64
+  # The shell is the window users see; without this it ships with the stock
+  # Electron icon in the taskbar and in Explorer.
+  icon: build/icon.ico
   # There is no code-signing certificate, and a self-signed binary would only
   # teach people to click past warnings. `signExecutable: false` skips the
   # signature but keeps rcedit, so the exe still carries the product icon and

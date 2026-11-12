@@ -46,6 +46,21 @@ $manifest = Get-Content (Join-Path $install 'install.json') -Raw | ConvertFrom-J
 if ($manifest.version -ne $ExpectedVersion -or $manifest.file_manifest_version -ne 2 -or ($manifest.files -match '^library[/\\]')) { throw 'Wrong version or polluted payload manifest' }
 if ((Get-ItemProperty $uninstallKey).DisplayVersion -ne $ExpectedVersion) { throw 'Wrong registered version' }
 foreach ($link in $shortcuts) { if (-not (Test-Path -LiteralPath $link)) { throw "Missing shortcut: $link" } }
+# A shortcut that opens a browser instead of the desktop window looks fine in
+# every other check, so compare the target itself.
+$shellExe = Join-Path $install 'desktop\LocalReel.exe'
+$expectedTarget = if (Test-Path -LiteralPath $shellExe) {
+    $shellExe
+} else {
+    Join-Path $install 'localreel-desktop.exe'
+}
+$wscript = New-Object -ComObject WScript.Shell
+foreach ($link in $shortcuts) {
+    $actual = $wscript.CreateShortcut($link).TargetPath
+    if ($actual -ne $expectedTarget) {
+        throw "Shortcut $link points at $actual, expected $expectedTarget"
+    }
+}
 Invoke-Setup $Installer -Uninstall
 foreach ($relative in $sentinels) {
     if ((Get-FileHash (Join-Path $install $relative)).Hash -ne $before[$relative]) { throw "User file changed: $relative" }
