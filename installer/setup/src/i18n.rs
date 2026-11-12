@@ -70,6 +70,14 @@ pub struct Text {
     pub press_enter: &'static str,
     pub unknown_argument: &'static str,
     pub help: &'static str,
+    // Graphical installer window.
+    pub gui_location: &'static str,
+    pub gui_browse: &'static str,
+    pub gui_install: &'static str,
+    pub gui_cancel: &'static str,
+    pub gui_installing: &'static str,
+    pub gui_done_title: &'static str,
+    pub gui_error_title: &'static str,
 }
 
 static ZH: Text = Text {
@@ -95,6 +103,13 @@ static ZH: Text = Text {
     press_enter: "按回车退出…",
     unknown_argument: "无法识别的参数：{argument}（使用 /? 查看用法）",
     help: "用法：localreel-setup.exe [/S] [/uninstall] [/removedata] [/lang=zh|en] [/D=<目录>] [/wait] [/launch]",
+    gui_location: "安装位置：",
+    gui_browse: "浏览…",
+    gui_install: "安装",
+    gui_cancel: "取消",
+    gui_installing: "正在安装… {percent}%",
+    gui_done_title: "安装完成",
+    gui_error_title: "安装失败",
 };
 
 static EN: Text = Text {
@@ -120,6 +135,13 @@ static EN: Text = Text {
     press_enter: "Press Enter to close…",
     unknown_argument: "Unknown argument: {argument} (use /? for usage)",
     help: "Usage: localreel-setup.exe [/S] [/uninstall] [/removedata] [/lang=zh|en] [/D=<dir>] [/wait] [/launch]",
+    gui_location: "Install location:",
+    gui_browse: "Browse…",
+    gui_install: "Install",
+    gui_cancel: "Cancel",
+    gui_installing: "Installing… {percent}%",
+    gui_done_title: "Installation complete",
+    gui_error_title: "Setup failed",
 };
 
 impl Text {

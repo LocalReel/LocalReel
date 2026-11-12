@@ -37,6 +37,11 @@ mod run {
     use crate::i18n::{Lang, Text};
     use crate::win;
 
+    // The window lives in its own file but is a child of this module, so it can
+    // reuse the copy/uninstall helpers without making them public.
+    #[path = "../gui.rs"]
+    mod gui;
+
     const VERSION: &str = env!("LOCALREEL_VERSION");
     const BUILD_STAMP: &str = env!("LOCALREEL_BUILT");
     /// The staged product, zipped by the packaging script and embedded here.
@@ -113,6 +118,14 @@ mod run {
         }
     }
 
+    /// Why the copy step did not finish.
+    enum InstallFailure {
+        /// Another LocalReel holds the program files.
+        Busy,
+        /// Anything else, already phrased for the user.
+        Failed(String),
+    }
+
     pub fn main() -> ExitCode {
         let mut lang = Lang::detect();
         // Parse once with the detected language so errors are readable, then
@@ -127,6 +140,15 @@ mod run {
         };
         lang = options.lang;
         let text = lang.text();
+
+        // Double-clicking the installer should look like an installer: a window,
+        // not a console prompt. Scripted and silent runs keep the console path,
+        // which is also what the in-app updater uses.
+        if !options.silent && gui::available() {
+            if let Some(code) = gui::run(&options, text) {
+                return ExitCode::from(code as u8);
+            }
+        }
 
         if options.uninstall {
             uninstall(text, &options)
@@ -185,15 +207,14 @@ mod run {
             println!("{}", text.installing);
         }
 
-        let files = match extract(target) {
-            Ok(files) => files,
-            Err(error) => {
-                println!("{}", text.format(text.failed, &[("error", &error)]));
-                return pause_exit(text, 1);
+        let mut quiet = |_done: usize, _total: usize| {};
+        if let Err(failure) = perform_install(target, options.wait, &mut quiet) {
+            match failure {
+                InstallFailure::Busy => println!("{}", text.busy),
+                InstallFailure::Failed(error) => {
+                    println!("{}", text.format(text.failed, &[("error", &error)]))
+                }
             }
-        };
-        if let Err(error) = finish_install(target, files) {
-            println!("{}", text.format(text.failed, &[("error", &error)]));
             return pause_exit(text, 1);
         }
 
@@ -202,13 +223,7 @@ mod run {
         let launch = options.launch
             && (options.force_launch || (!options.silent && confirm(text.launch_question, true)));
         if launch {
-            let launcher = target.join("localreel-desktop.exe");
-            let launcher = if launcher.is_file() {
-                launcher
-            } else {
-                target.join("localreel.exe")
-            };
-            let _ = Command::new(launcher).current_dir(target).spawn();
+            launch_installed(target);
         }
         if !options.silent {
             pause(text);
@@ -281,27 +296,73 @@ mod run {
         ExitCode::SUCCESS
     }
 
+    /// Start the installed program, preferring the GUI launcher.
+    fn launch_installed(target: &Path) -> bool {
+        let launcher = target.join("localreel-desktop.exe");
+        let launcher = if launcher.is_file() {
+            launcher
+        } else {
+            target.join("localreel.exe")
+        };
+        Command::new(launcher).current_dir(target).spawn().is_ok()
+    }
+
+    /// Copy the payload into `target` and finish the per-user registration.
+    ///
+    /// Shared by the console flow and the window, so both do exactly the same
+    /// thing and only their presentation differs.
+    fn perform_install(
+        target: &Path,
+        wait: bool,
+        progress: &mut dyn FnMut(usize, usize),
+    ) -> Result<(), InstallFailure> {
+        if wait && win::is_running(target) {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
+            while win::is_running(target) && std::time::Instant::now() < deadline {
+                std::thread::sleep(std::time::Duration::from_millis(250));
+            }
+        }
+        if win::is_running(target) {
+            return Err(InstallFailure::Busy);
+        }
+        let files = extract_payload_with_progress(target, PAYLOAD, progress)
+            .map_err(InstallFailure::Failed)?;
+        finish_install(target, files).map_err(InstallFailure::Failed)?;
+        Ok(())
+    }
+
     /// Unpack the embedded payload.
     ///
     /// A zip made from the stage folder wraps everything in one directory; a
     /// zip made from its contents does not. Strip a wrapper only when the
     /// archive actually has one, so both layouts install correctly.
-    fn extract(target: &Path) -> Result<Vec<String>, String> {
-        extract_payload(target, PAYLOAD)
+    #[cfg(test)]
+    fn extract_payload(target: &Path, payload: &[u8]) -> Result<Vec<String>, String> {
+        extract_payload_with_progress(target, payload, &mut |_, _| {})
     }
 
-    fn extract_payload(target: &Path, payload: &[u8]) -> Result<Vec<String>, String> {
+    /// Unpack the payload, reporting `(done, total)` entries as it goes.
+    ///
+    /// The counter is advisory: a skipped directory entry still advances it, so
+    /// the window can show movement even when the archive has few real files.
+    fn extract_payload_with_progress(
+        target: &Path,
+        payload: &[u8],
+        progress: &mut dyn FnMut(usize, usize),
+    ) -> Result<Vec<String>, String> {
         let mut files = Vec::new();
         fs::create_dir_all(target).map_err(|error| error.to_string())?;
         let reader = io::Cursor::new(payload);
         let mut archive = zip::ZipArchive::new(reader)
             .map_err(|error| format!("payload is not a zip: {error}"))?;
+        let total = archive.len();
         let wrapper = wrapper_folder(&mut archive);
-        for index in 0..archive.len() {
+        for index in 0..total {
             let mut entry = archive
                 .by_index(index)
                 .map_err(|error| format!("payload entry {index}: {error}"))?;
             let Some(name) = entry.enclosed_name() else {
+                progress(index + 1, total);
                 continue;
             };
             let mut components = name.components();
@@ -310,11 +371,13 @@ mod run {
             }
             let relative: PathBuf = components.collect();
             if relative.as_os_str().is_empty() {
+                progress(index + 1, total);
                 continue;
             }
             let destination = target.join(&relative);
             if entry.is_dir() {
                 fs::create_dir_all(&destination).map_err(|error| error.to_string())?;
+                progress(index + 1, total);
                 continue;
             }
             if let Some(parent) = destination.parent() {
@@ -325,6 +388,7 @@ mod run {
             io::copy(&mut entry, &mut file)
                 .map_err(|error| format!("{}: {error}", destination.display()))?;
             files.push(relative.to_string_lossy().replace('\\', "/"));
+            progress(index + 1, total);
         }
         if !files.iter().any(|file| file == "localreel.exe") {
             return Err("the payload did not contain localreel.exe".to_string());

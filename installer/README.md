@@ -1,4 +1,36 @@
-# Windows MSI
+# Windows installers
+
+Two installers ship from this repository:
+
+| Artifact | Scope | UI |
+| --- | --- | --- |
+| `localreel-<version>-x64-setup.exe` | current user only | own window (see below) |
+| `localreel-<version>-x64.msi` | per-user scope, promoted to machine when an admin runs it | WiX wizard |
+
+## Per-user setup (`setup/`)
+
+`setup/` is a small Rust program that embeds the staged payload and does the
+per-user work itself, because Windows Installer cannot keep a per-user package
+per-user when an administrator runs it (see ADR-016).
+
+Double-clicking it opens a window that shows the target folder, offers a Browse
+button, reports progress and asks whether to start LocalReel when it finishes.
+It runs without administrator rights and writes only inside the current user's
+profile.
+
+| Flag | Effect |
+| --- | --- |
+| `/S` | no window; used by the in-app updater and by CI |
+| `/D=<folder>` | install folder (also editable in the window) |
+| `/lang=zh\|en` | override the Windows display language |
+| `/uninstall` | remove the program, keep the library |
+| `/removedata` | with `/uninstall`, remove the library too |
+| `/wait` | wait for a running LocalReel to exit (updates) |
+
+If the window cannot be created, the program falls back to its console flow and
+leaves a note in `%TEMP%\localreel-setup-gui.log`.
+
+## MSI
 
 `localreel.wxs` is a WiX v5 source for a per-user MSI with a wizard that lets
 the user choose the installation directory.

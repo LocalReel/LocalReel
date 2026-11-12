@@ -27,7 +27,7 @@ Candidate artifacts rebuilt from the pinned commits (working tree clean):
 | --- | --- | --- |
 | `localreel.exe` (server) | 16,737,792 | `E6A06D4838123C0D413B735109FAEBD8B105618FB024CBB0C87C0ADEF8DBD60B` |
 | desktop `LocalReel.exe` | 246,588,928 | `2535E0AF7D1F8976111CC58CEAE34D1DDB49D9FB0A4FDB56163E38CF20C49238` |
-| desktop setup candidate | 152,918,528 | `0BE5DB62404EB08491014345C9106E0CDB9CB8C8CCAFD8CF3B3C4558EA3DF3CD` |
+| desktop setup candidate | 152,936,960 | `1445A2074EF0351FE6935EBF688F89B0A7EFDC017725D63D8212212A95E8B827` |
 
 The packaged tree reports Electron `44.9.1` (its `version` file and a packaged
 executable probe agree); the desktop shell hash matched an earlier independent
