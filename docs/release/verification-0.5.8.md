@@ -1,4 +1,4 @@
-﻿# 0.5.8 release verification preparation
+# 0.5.8 release verification preparation
 
 Status: source and local artifacts verified, **real setup/Sandbox installation has
 not been executed**. Do not infer release readiness from source tests or an npm
