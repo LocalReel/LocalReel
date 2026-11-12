@@ -69,6 +69,8 @@ mod run {
         no_start_menu: bool,
         /// Skip the desktop link.
         no_desktop: bool,
+        /// Library location chosen by the user; `None` keeps the current one.
+        data_dir: Option<PathBuf>,
     }
 
     impl Options {
@@ -85,6 +87,7 @@ mod run {
                 explicit_dir: false,
                 no_start_menu: false,
                 no_desktop: false,
+                data_dir: None,
             };
             let mut args = args.peekable();
             while let Some(argument) = args.next() {
@@ -97,6 +100,17 @@ mod run {
                     "/launch" | "--launch" => options.force_launch = true,
                     "/nostartmenu" | "--nostartmenu" => options.no_start_menu = true,
                     "/nodesktop" | "--nodesktop" | "/nodesktopicon" => options.no_desktop = true,
+                    value if value.starts_with("/data=") || value.starts_with("--data=") => {
+                        let raw = value.split_once('=').map(|(_, value)| value).unwrap_or("");
+                        if raw.trim().is_empty() {
+                            return Err(text.help.to_string());
+                        }
+                        options.data_dir = Some(PathBuf::from(raw));
+                    }
+                    "--data" | "/data" => {
+                        let raw = args.next().ok_or_else(|| text.help.to_string())?;
+                        options.data_dir = Some(PathBuf::from(raw));
+                    }
                     "/wait" | "--wait" => options.wait = true,
                     value if value.starts_with("/lang=") || value.starts_with("--lang=") => {
                         let raw = value.split_once('=').map(|(_, value)| value).unwrap_or("");
@@ -230,7 +244,13 @@ mod run {
         }
 
         let mut quiet = |_done: usize, _total: usize| {};
-        if let Err(failure) = perform_install(target, options.wait, &mut quiet, &shortcuts) {
+        if let Err(failure) = perform_install(
+            target,
+            options.wait,
+            &mut quiet,
+            &shortcuts,
+            options.data_dir.as_deref(),
+        ) {
             match failure {
                 InstallFailure::Busy => println!("{}", text.busy),
                 InstallFailure::Failed(error) => {
@@ -321,7 +341,7 @@ mod run {
             };
         }
 
-        let libraries = [win::data_dir(), target.join("data")];
+        let libraries = data_candidates(target);
         let mut messages = Vec::new();
         if remove_data {
             for data in libraries {
@@ -349,6 +369,40 @@ mod run {
         }
     }
 
+    /// Every directory that may hold the library for this installation.
+    ///
+    /// The recorded choice wins, then the registry, then the default and the
+    /// legacy `<install>\data`. Duplicates are dropped so a kept library is
+    /// reported once.
+    fn data_candidates(target: &Path) -> Vec<PathBuf> {
+        let mut dirs: Vec<PathBuf> = Vec::new();
+        if let Some(dir) = manifest_data_dir(target) {
+            dirs.push(dir);
+        }
+        if let Some(dir) = win::recorded_data_dir() {
+            dirs.push(dir);
+        }
+        dirs.push(win::data_dir());
+        dirs.push(target.join("data"));
+        dirs.retain(|dir| dir.is_absolute());
+        let mut seen = std::collections::HashSet::new();
+        dirs.retain(|dir| seen.insert(dir.to_string_lossy().to_lowercase()));
+        dirs
+    }
+
+    /// The library path recorded by the install that is being removed.
+    fn manifest_data_dir(target: &Path) -> Option<PathBuf> {
+        fs::read_to_string(target.join("install.json"))
+            .ok()
+            .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+            .and_then(|value| {
+                value
+                    .get("data_dir")
+                    .and_then(|dir| dir.as_str())
+                    .map(PathBuf::from)
+            })
+    }
+
     /// Start the installed program, preferring the GUI launcher.
     fn launch_installed(target: &Path) -> bool {
         let launcher = target.join("localreel-desktop.exe");
@@ -369,6 +423,7 @@ mod run {
         wait: bool,
         progress: &mut dyn FnMut(usize, usize),
         shortcuts: &[PathBuf],
+        data_dir: Option<&Path>,
     ) -> Result<(), InstallFailure> {
         if wait && win::is_running(target) {
             let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
@@ -381,7 +436,7 @@ mod run {
         }
         let files = extract_payload_with_progress(target, PAYLOAD, progress)
             .map_err(InstallFailure::Failed)?;
-        finish_install(target, files, shortcuts).map_err(InstallFailure::Failed)?;
+        finish_install(target, files, shortcuts, data_dir).map_err(InstallFailure::Failed)?;
         Ok(())
     }
 
@@ -505,6 +560,7 @@ mod run {
         target: &Path,
         mut files: Vec<String>,
         shortcuts: &[PathBuf],
+        data_dir: Option<&Path>,
     ) -> Result<(), String> {
         let self_copy = target.join("localreel-setup.exe");
         if let Ok(current) = std::env::current_exe() {
@@ -531,7 +587,16 @@ mod run {
             .iter()
             .map(|path| path.to_string_lossy().to_string())
             .collect();
-        let manifest = build_manifest(target, &files, &shortcut_list, estimated_kb);
+        // A chosen library is written to the server's settings before anything
+        // else, so a failure here leaves no half-installed registration.
+        if let Some(dir) = data_dir {
+            win::set_config_data_dir(dir)
+                .map_err(|error| format!("cannot update the library location: {error}"))?;
+        }
+        let library = data_dir
+            .map(Path::to_path_buf)
+            .unwrap_or_else(win::data_dir);
+        let manifest = build_manifest(target, &files, &shortcut_list, estimated_kb, &library);
         fs::write(
             target.join("install.json"),
             serde_json::to_string_pretty(&manifest).map_err(|error| error.to_string())?,
@@ -553,7 +618,7 @@ mod run {
         let uninstall_string = format!("\"{}\" /uninstall", self_copy.display());
         win::register_uninstall(target, VERSION, estimated_kb, &uninstall_string)
             .map_err(|error| format!("cannot register the uninstall entry: {error}"))?;
-        win::record_install(target, VERSION, &win::data_dir());
+        win::record_install(target, VERSION, &library);
         Ok(())
     }
 
@@ -566,6 +631,7 @@ mod run {
         files: &[String],
         shortcuts: &[String],
         estimated_kb: u64,
+        data_dir: &Path,
     ) -> serde_json::Value {
         serde_json::json!({
             "product": "LocalReel",
@@ -574,6 +640,7 @@ mod run {
             "build": BUILD_STAMP,
             "installed_at": timestamp(),
             "install_dir": target.to_string_lossy(),
+            "data_dir": data_dir.to_string_lossy(),
             "per_user": true,
             "estimated_kb": estimated_kb,
             "files": files,
@@ -764,11 +831,21 @@ mod run {
                 .join(format!("localreel-manifest-test-{}", std::process::id()));
             let files = vec!["localreel.exe".to_string()];
             let start = dir.join("Start Menu").join("LocalReel.lnk");
-            let value = build_manifest(&dir, &files, &[start.to_string_lossy().to_string()], 42);
+            let value = build_manifest(
+                &dir,
+                &files,
+                &[start.to_string_lossy().to_string()],
+                42,
+                &dir.join("library"),
+            );
             let listed = value["shortcuts"].as_array().unwrap();
             assert_eq!(listed.len(), 1);
             assert_eq!(listed[0], start.to_string_lossy().as_ref());
             assert_eq!(value["file_manifest_version"], 2);
+            assert_eq!(
+                value["data_dir"],
+                dir.join("library").to_string_lossy().as_ref()
+            );
         }
 
         #[test]

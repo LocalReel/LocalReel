@@ -73,6 +73,7 @@ pub struct Text {
     // Graphical installer window.
     pub gui_heading: &'static str,
     pub gui_location: &'static str,
+    pub gui_library: &'static str,
     pub gui_browse: &'static str,
     pub gui_install: &'static str,
     pub gui_cancel: &'static str,
@@ -113,6 +114,7 @@ static ZH: Text = Text {
     unknown_argument: "无法识别的参数：{argument}（使用 /? 查看用法）",
     help: "用法：localreel-setup.exe [/S] [/uninstall] [/removedata] [/lang=zh|en] [/D=<目录>] [/wait] [/launch]",
     gui_location: "安装位置：",
+    gui_library: "媒体库位置（可修改，留空使用默认）：",
     gui_browse: "浏览…",
     gui_install: "安装",
     gui_cancel: "取消",
@@ -154,6 +156,7 @@ static EN: Text = Text {
     unknown_argument: "Unknown argument: {argument} (use /? for usage)",
     help: "Usage: localreel-setup.exe [/S] [/uninstall] [/removedata] [/lang=zh|en] [/D=<dir>] [/wait] [/launch]",
     gui_location: "Install location:",
+    gui_library: "Library location (editable; empty uses the default):",
     gui_browse: "Browse…",
     gui_install: "Install",
     gui_cancel: "Cancel",

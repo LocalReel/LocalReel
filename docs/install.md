@@ -54,11 +54,13 @@ Upstream ships one archive, so `-Profile probe` does not shrink the download —
    Start Menu shortcut and a desktop shortcut named *LocalReel*, and registers
    the program in **Apps & Features**.
 
-The setup program opens a window: it names the folder it will use, lets you pick
-another one, shows progress, and offers to start LocalReel when it finishes.
-The window follows the Windows display language: Chinese and English today. Pass
-`/lang=zh` or `/lang=en` to override, `/S` for an unattended install, or
-`/D=<folder>` to pick another folder without the window.
+The setup program opens a window: it shows the program folder and the library
+folder, lets you change either one (the library can sit on another drive), lets
+you choose which shortcuts to create, shows progress, and offers to start
+LocalReel when it finishes. The window follows the Windows display language:
+Chinese and English today. Pass `/lang=zh` or `/lang=en` to override, `/S` for an
+unattended install, `/D=<folder>` for the program folder, or `/data=<folder>` for
+the library.
 
 Uninstalling from Apps & Features removes the program and the shortcuts but
 keeps the library. Add `/removedata` to remove the library as well.

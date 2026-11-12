@@ -21,11 +21,21 @@ profile.
 | Flag | Effect |
 | --- | --- |
 | `/S` | no window; used by the in-app updater and by CI |
-| `/D=<folder>` | install folder (also editable in the window) |
+| `/D=<folder>` | program folder (also editable in the window) |
+| `/data=<folder>` | library folder; written as `[data] dir` in `%APPDATA%\LocalReel\localreel.toml` |
+| `/nodesktop` | skip the desktop shortcut |
+| `/nostartmenu` | skip the Start Menu shortcut |
 | `/lang=zh\|en` | override the Windows display language |
 | `/uninstall` | remove the program, keep the library |
 | `/removedata` | with `/uninstall`, remove the library too |
 | `/wait` | wait for a running LocalReel to exit (updates) |
+
+The window offers the same choices: program folder, library folder with its own
+Browse button, and a checkbox per shortcut. Shortcuts are recorded in
+`install.json`, so uninstall removes only the ones that were actually created.
+The library is written to the server's settings file only when the user changes
+it, which keeps other settings and comments untouched. Uninstall reads the
+recorded library path, so a custom folder is offered for deletion too.
 
 If the window cannot be created, the program falls back to its console flow and
 leaves a note in `%TEMP%\localreel-setup-gui.log`.

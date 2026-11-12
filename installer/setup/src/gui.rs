@@ -101,6 +101,7 @@ const DT_NOPREFIX: u32 = 0x0800;
 const ID_INSTALL: usize = 1; // IDOK: Enter activates the default button
 const ID_CANCEL: usize = 2; // IDCANCEL: Esc closes the window
 const ID_BROWSE: usize = 101;
+const ID_LIBRARY_BROWSE: usize = 106;
 const ID_LAUNCH: usize = 102;
 const ID_START_MENU: usize = 103;
 const ID_DESKTOP: usize = 104;
@@ -127,6 +128,8 @@ struct Ui {
     mode: Mode,
     icon: windows_sys::Win32::UI::WindowsAndMessaging::HICON,
     location_edit: HWND,
+    library_edit: HWND,
+    library_browse: HWND,
     status: HWND,
     progress: HWND,
     launch_check: HWND,
@@ -138,6 +141,8 @@ struct Ui {
     cancel_button: HWND,
     text: &'static Text,
     target: PathBuf,
+    /// The library the server would use without an explicit choice.
+    default_data_dir: PathBuf,
     busy: bool,
     exit_code: u32,
     result: Arc<Mutex<Option<Outcome>>>,
@@ -269,10 +274,16 @@ pub fn run(options: &Options, text: &'static Text) -> Option<u32> {
             .unwrap_or_else(|| options.install_dir.clone())
     };
 
+    let default_data_dir = win::recorded_data_dir()
+        .or_else(|| win::config_data_dir(&target))
+        .unwrap_or_else(win::data_dir);
+
     let mut state = Box::new(Ui {
         mode,
         icon,
         location_edit: std::ptr::null_mut(),
+        library_edit: std::ptr::null_mut(),
+        library_browse: std::ptr::null_mut(),
         status: std::ptr::null_mut(),
         progress: std::ptr::null_mut(),
         launch_check: std::ptr::null_mut(),
@@ -284,6 +295,7 @@ pub fn run(options: &Options, text: &'static Text) -> Option<u32> {
         cancel_button: std::ptr::null_mut(),
         text,
         target,
+        default_data_dir,
         busy: false,
         exit_code: 2,
         result: Arc::new(Mutex::new(None)),
@@ -385,10 +397,6 @@ unsafe fn create_children(hwnd: HWND, instance: *mut c_void, state: &mut Ui) -> 
 
     if install {
         let location_label = wide(state.text.gui_location);
-        let data_line = wide(&state.text.format(
-            state.text.data_dir,
-            &[("dir", &win::data_dir().to_string_lossy())],
-        ));
         let target = wide(&state.target.to_string_lossy());
 
         let label = child(
@@ -436,19 +444,53 @@ unsafe fn create_children(hwnd: HWND, instance: *mut c_void, state: &mut Ui) -> 
         state.browse_button = browse;
         next_y += 34;
 
-        let library = child(
+        // Library location: editable, because a large video library rarely
+        // belongs on the system drive.
+        let library_label = wide(state.text.gui_library);
+        let library_text = wide(&state.default_data_dir.to_string_lossy());
+        let library_caption = child(
             instance,
             hwnd,
             "STATIC",
-            &data_line,
+            &library_label,
             SS_LEFT | SS_NOPREFIX,
             scaled(24, scale),
             scaled(next_y, scale),
             scaled(552, scale),
             scaled(18, scale),
         );
-        font(library, state.body_font as usize);
-        next_y += 30;
+        font(library_caption, state.body_font as usize);
+        next_y += 22;
+
+        let library_edit = child(
+            instance,
+            hwnd,
+            "EDIT",
+            &library_text,
+            WS_BORDER | WS_TABSTOP | ES_AUTOHSCROLL,
+            scaled(24, scale),
+            scaled(next_y, scale),
+            scaled(400, scale),
+            scaled(26, scale),
+        );
+        font(library_edit, state.body_font as usize);
+        state.library_edit = library_edit;
+
+        let library_browse = child(
+            instance,
+            hwnd,
+            "BUTTON",
+            &browse_label,
+            WS_TABSTOP,
+            scaled(432, scale),
+            scaled(next_y - 1, scale),
+            scaled(120, scale),
+            scaled(28, scale),
+        );
+        font(library_browse, state.body_font as usize);
+        identify(library_browse, ID_LIBRARY_BROWSE);
+        state.library_browse = library_browse;
+        next_y += 34;
     } else {
         let remove_label = wide(state.text.gui_remove_data);
         let remove = child(
@@ -733,7 +775,8 @@ unsafe extern "system" fn window_proc(
             match id {
                 ID_INSTALL => start(hwnd),
                 ID_CANCEL => cancel(hwnd),
-                ID_BROWSE => choose_directory(hwnd),
+                ID_BROWSE => choose_directory(hwnd, false),
+                ID_LIBRARY_BROWSE => choose_directory(hwnd, true),
                 _ => {}
             }
             0
@@ -795,7 +838,7 @@ unsafe fn start(hwnd: HWND) {
         return;
     }
 
-    let (target, shortcuts, remove_data) = match state.mode {
+    let (target, shortcuts, remove_data, data_dir) = match state.mode {
         Mode::Install => {
             let mut buffer = vec![0u16; 1024];
             let length = GetWindowTextW(
@@ -818,12 +861,31 @@ unsafe fn start(hwnd: HWND) {
             if checked(state.desktop_check) {
                 shortcuts.push(win::desktop_shortcut());
             }
-            (target, shortcuts, false)
+            // Only a changed library path is written, so an untouched install
+            // never rewrites the user's settings file.
+            let mut library_buffer = vec![0u16; 1024];
+            let library_length = GetWindowTextW(
+                state.library_edit,
+                library_buffer.as_mut_ptr(),
+                library_buffer.len() as i32,
+            );
+            let library = if library_length > 0 {
+                Some(PathBuf::from(String::from_utf16_lossy(
+                    &library_buffer[..library_length as usize],
+                )))
+            } else {
+                None
+            };
+            let changed = library
+                .as_ref()
+                .filter(|path| **path != state.default_data_dir);
+            (target, shortcuts, false, changed.cloned())
         }
         Mode::Uninstall => (
             state.target.clone(),
             super::recorded_shortcuts(&state.target),
             checked(state.remove_data_check),
+            None,
         ),
     };
 
@@ -831,6 +893,8 @@ unsafe fn start(hwnd: HWND) {
     state.target = target.clone();
     for control in [
         state.location_edit,
+        state.library_edit,
+        state.library_browse,
         state.browse_button,
         state.primary_button,
         state.cancel_button,
@@ -873,7 +937,13 @@ unsafe fn start(hwnd: HWND) {
                         );
                     }
                 };
-                Outcome::Install(perform_install(&target, false, &mut progress, &shortcuts))
+                Outcome::Install(perform_install(
+                    &target,
+                    false,
+                    &mut progress,
+                    &shortcuts,
+                    data_dir.as_deref(),
+                ))
             }
             Mode::Uninstall => {
                 Outcome::Uninstall(perform_uninstall(&target, remove_data, &shortcuts, text))
@@ -947,6 +1017,8 @@ unsafe fn restore_after_failure(state: &mut Ui) {
     state.busy = false;
     for control in [
         state.location_edit,
+        state.library_edit,
+        state.library_browse,
         state.browse_button,
         state.primary_button,
         state.cancel_button,
@@ -984,12 +1056,16 @@ unsafe fn cancel(hwnd: HWND) {
     DestroyWindow(hwnd);
 }
 
-unsafe fn choose_directory(hwnd: HWND) {
+unsafe fn choose_directory(hwnd: HWND, library: bool) {
     let Some(state) = state(hwnd) else { return };
     if state.busy {
         return;
     }
-    let title = wide(state.text.gui_location);
+    let title = wide(if library {
+        state.text.gui_library
+    } else {
+        state.text.gui_location
+    });
     let mut display = vec![0u16; 260];
     let mut info: BROWSEINFOW = std::mem::zeroed();
     info.hwndOwner = hwnd;
@@ -1008,7 +1084,12 @@ unsafe fn choose_directory(hwnd: HWND) {
     }
     let length = buffer.iter().position(|&unit| unit == 0).unwrap_or(0);
     let chosen = wide(&String::from_utf16_lossy(&buffer[..length]));
-    SetWindowTextW(state.location_edit, chosen.as_ptr());
+    let target = if library {
+        state.library_edit
+    } else {
+        state.location_edit
+    };
+    SetWindowTextW(target, chosen.as_ptr());
 }
 
 /// Pull the largest image out of the embedded `.ico` and turn it into an HICON.

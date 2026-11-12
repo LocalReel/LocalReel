@@ -66,6 +66,151 @@ pub fn installed_version() -> Option<String> {
     key.get_value("Version").ok()
 }
 
+/// Where the library was put by the last install, if it was customised.
+pub fn recorded_data_dir() -> Option<PathBuf> {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let key = hkcu.open_subkey_with_flags(APP_KEY, KEY_READ).ok()?;
+    let value: String = key.get_value("DataDir").ok()?;
+    let path = PathBuf::from(value);
+    path.is_absolute().then_some(path)
+}
+
+/// The server's settings file: `%APPDATA%\LocalReel\localreel.toml`.
+pub fn config_path() -> PathBuf {
+    let roaming = match std::env::var_os("APPDATA") {
+        Some(value) => PathBuf::from(value),
+        None => home().join("AppData").join("Roaming"),
+    };
+    roaming.join("LocalReel").join("localreel.toml")
+}
+
+/// The `[data] dir` the settings file names, if any.
+///
+/// A relative value is anchored to the program's own folder, which is what the
+/// server does (`resolve_paths`), not to the settings file.
+pub fn config_data_dir(install_dir: &Path) -> Option<PathBuf> {
+    let text = fs::read_to_string(config_path()).ok()?;
+    let value = data_dir_in(&text)?;
+    let path = PathBuf::from(value);
+    if path.is_absolute() {
+        return Some(path);
+    }
+    Some(install_dir.join(path))
+}
+
+/// Point `[data] dir` at `dir`, editing only that line.
+///
+/// A parse-and-rewrite would drop the user's comments and ordering, so the file
+/// is patched line by line and every other setting is left alone.
+pub fn set_config_data_dir(dir: &Path) -> io::Result<()> {
+    let path = config_path();
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let text = fs::read_to_string(&path).unwrap_or_default();
+    fs::write(&path, replace_data_dir(&text, &dir.to_string_lossy()))
+}
+
+/// Value of `[data] dir` in TOML text, without touching the filesystem.
+fn data_dir_in(text: &str) -> Option<String> {
+    let mut in_data = false;
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') {
+            in_data = trimmed.trim_start_matches('[').trim_end_matches(']').trim() == "data";
+            continue;
+        }
+        if !in_data {
+            continue;
+        }
+        let Some((key, value)) = trimmed.split_once('=') else {
+            continue;
+        };
+        if key.trim() != "dir" {
+            continue;
+        }
+        if let Some(parsed) = parse_toml_string(value) {
+            return Some(parsed);
+        }
+    }
+    None
+}
+
+/// Rewrite (or add) the `dir` key of `[data]`, keeping everything else.
+fn replace_data_dir(text: &str, dir: &str) -> String {
+    let quoted = format!("dir = \"{}\"", escape_toml_string(dir));
+    let lines: Vec<&str> = text.lines().collect();
+    let mut output: Vec<String> = Vec::with_capacity(lines.len() + 2);
+    let mut in_data = false;
+    let mut section_seen = false;
+    let mut written = false;
+
+    for line in &lines {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') {
+            // Leaving a `[data]` section without a `dir` key: insert it first.
+            if in_data && !written {
+                output.push(quoted.clone());
+                written = true;
+            }
+            in_data = trimmed.trim_start_matches('[').trim_end_matches(']').trim() == "data";
+            section_seen |= in_data;
+        } else if in_data {
+            if let Some((key, _)) = trimmed.split_once('=') {
+                if key.trim() == "dir" {
+                    output.push(quoted.clone());
+                    written = true;
+                    continue;
+                }
+            }
+        }
+        output.push((*line).to_string());
+    }
+    if in_data && !written {
+        output.push(quoted.clone());
+    }
+    if !section_seen {
+        if !output.is_empty() {
+            output.push(String::new());
+        }
+        output.push("[data]".to_string());
+        output.push(quoted);
+    }
+    let mut joined = output.join("\n");
+    joined.push('\n');
+    joined
+}
+
+fn escape_toml_string(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+fn parse_toml_string(raw: &str) -> Option<String> {
+    let raw = raw.trim();
+    if let Some(rest) = raw.strip_prefix('"') {
+        let mut out = String::new();
+        let mut chars = rest.chars();
+        while let Some(ch) = chars.next() {
+            match ch {
+                '"' => return Some(out),
+                '\\' => match chars.next()? {
+                    '\\' => out.push('\\'),
+                    '"' => out.push('"'),
+                    'n' => out.push('\n'),
+                    't' => out.push('\t'),
+                    other => out.push(other),
+                },
+                other => out.push(other),
+            }
+        }
+        return None;
+    }
+    if let Some(rest) = raw.strip_prefix('\'') {
+        return rest.split('\'').next().map(str::to_string);
+    }
+    None
+}
+
 /// The folder a previous run installed to, if the user picked one.
 pub fn last_install_dir() -> Option<PathBuf> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
@@ -315,5 +460,36 @@ mod tests {
         );
         assert_eq!(expand_environment("no placeholders"), "no placeholders");
         assert_eq!(expand_environment("%NOPE%\\x"), "%NOPE%\\x");
+    }
+
+    #[test]
+    fn rewrites_only_the_data_dir_line() {
+        let text = "# my settings\n[server]\nport = 3101\n\n[data]\n# library\ndir = \"D:\\\\Old\"\nkeep = true\n";
+        let updated = replace_data_dir(text, "E:\\Videos");
+        assert!(updated.contains("[server]\nport = 3101"));
+        assert!(updated.contains("# library"));
+        assert!(updated.contains("keep = true"));
+        assert!(updated.contains("dir = \"E:\\\\Videos\""));
+        assert!(!updated.contains("Old"));
+        assert_eq!(data_dir_in(&updated).as_deref(), Some("E:\\Videos"));
+    }
+
+    #[test]
+    fn adds_the_key_to_an_existing_data_section() {
+        let updated = replace_data_dir("[data]\n", "D:\\Media");
+        assert_eq!(data_dir_in(&updated).as_deref(), Some("D:\\Media"));
+    }
+
+    #[test]
+    fn appends_a_section_when_missing() {
+        let updated = replace_data_dir("[server]\nport = 1\n", "D:\\Media");
+        assert!(updated.contains("[server]"));
+        assert_eq!(data_dir_in(&updated).as_deref(), Some("D:\\Media"));
+    }
+
+    #[test]
+    fn reads_a_quoted_windows_path() {
+        let text = "[data]\ndir = 'C:\\Users\\me\\Videos'\n";
+        assert_eq!(data_dir_in(text).as_deref(), Some("C:\\Users\\me\\Videos"));
     }
 }
