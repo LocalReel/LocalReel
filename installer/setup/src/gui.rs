@@ -1,14 +1,13 @@
 //! The windowed front end of the per-user installer.
 //!
 //! Double-clicking `localreel-setup.exe` should look like an installer: one
-//! window that shows what will happen, lets the user pick a folder, and then
-//! reports progress and completion. Everything that actually touches the disk
-//! lives in the parent module (`perform_install`), so the window and the console
-//! flow cannot drift apart.
+//! window that says what will happen, lets the user pick a folder, shows
+//! progress, and offers to start LocalReel when it finishes.
 //!
-//! The console path stays for `/S` and for scripted runs; if the window cannot
-//! be created (no interactive desktop), `run` returns `None` and the caller falls
-//! back to it.
+//! Everything that touches the disk lives in the parent module
+//! (`perform_install`), so the window and the console flow cannot drift apart.
+//! The console path stays for `/S` and scripted runs; if the window cannot be
+//! created, `run` returns `None` and the caller falls back to it.
 
 use std::ffi::c_void;
 use std::path::PathBuf;
@@ -24,25 +23,33 @@ use windows_sys::Win32::System::Com::{
     CoInitializeEx, CoTaskMemFree, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE,
 };
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
-use windows_sys::Win32::UI::Input::KeyboardAndMouse::EnableWindow;
+use windows_sys::Win32::UI::Controls::{
+    InitCommonControlsEx, ICC_PROGRESS_CLASS, INITCOMMONCONTROLSEX,
+};
+use windows_sys::Win32::UI::HiDpi::{
+    GetDpiForSystem, SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
+};
+use windows_sys::Win32::UI::Input::KeyboardAndMouse::{EnableWindow, VK_ESCAPE};
 use windows_sys::Win32::UI::Shell::{
     SHBrowseForFolderW, SHGetPathFromIDListW, BIF_NEWDIALOGSTYLE, BIF_RETURNONLYFSDIRS, BROWSEINFOW,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    AdjustWindowRectEx, CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW,
-    GetMessageW, GetWindowLongPtrW, GetWindowTextW, IsDialogMessageW, LoadCursorW, MessageBoxW,
-    PostMessageW, PostQuitMessage, RegisterClassW, SendMessageW, SetWindowLongPtrW, SetWindowTextW,
-    ShowWindow, TranslateMessage, MSG, WNDCLASSW,
+    AdjustWindowRectEx, CreateIconFromResourceEx, CreateWindowExW, DefWindowProcW, DestroyWindow,
+    DispatchMessageW, GetMessageW, GetWindowLongPtrW, GetWindowTextW, IsDialogMessageW,
+    LoadCursorW, MessageBoxW, PostMessageW, PostQuitMessage, RegisterClassW, SendMessageW,
+    SetWindowLongPtrW, SetWindowTextW, ShowWindow, TranslateMessage, MSG, WNDCLASSW,
 };
 
 use super::{perform_install, win, InstallFailure, Options, Text, VERSION};
 
 // Window messages and styles the standard library does not re-export for us.
+const WM_KEYDOWN: u32 = 0x0100;
 const WM_CLOSE: u32 = 0x0010;
 const WM_COMMAND: u32 = 0x0111;
 const WM_CTLCOLORSTATIC: u32 = 0x0138;
 const WM_DESTROY: u32 = 0x0002;
 const WM_SETFONT: u32 = 0x0030;
+const WM_SETICON: u32 = 0x0080;
 const WM_APP: u32 = 0x8000;
 const WM_APP_PROGRESS: u32 = WM_APP + 1;
 const WM_APP_DONE: u32 = WM_APP + 2;
@@ -52,15 +59,25 @@ const WS_CHILD: u32 = 0x4000_0000;
 const WS_VISIBLE: u32 = 0x1000_0000;
 const WS_TABSTOP: u32 = 0x0001_0000;
 const WS_BORDER: u32 = 0x0080_0000;
-const WS_VSCROLL: u32 = 0x0020_0000;
 const ES_AUTOHSCROLL: u32 = 0x0080;
 const BS_DEFPUSHBUTTON: u32 = 0x0000_0001;
+const BS_AUTOCHECKBOX: u32 = 0x0000_0003;
 const SS_LEFT: u32 = 0x0000_0000;
 const SS_NOPREFIX: u32 = 0x0080;
+const SS_ETCHEDHORZ: u32 = 0x0010;
+const BM_SETCHECK: u32 = 0x00F1;
+const BM_GETCHECK: u32 = 0x00F0;
+const BST_CHECKED: isize = 1;
+const PBM_SETRANGE32: u32 = 0x0406;
+const PBM_SETPOS: u32 = 0x0402;
 const SW_SHOW: i32 = 5;
+const SW_HIDE: i32 = 0;
 const CW_USEDEFAULT: i32 = 0x8000_0000u32 as i32;
 const GWLP_USERDATA: i32 = -21;
+const GWLP_ID: i32 = -12;
 const COLOR_WINDOW: i32 = 5;
+const ICON_BIG: usize = 1;
+const ICON_SMALL: usize = 0;
 const IDC_ARROW: *const u16 = 32512 as *const u16;
 const MB_OK: u32 = 0x0000_0000;
 const MB_ICONERROR: u32 = 0x0000_0010;
@@ -69,14 +86,21 @@ const MB_ICONQUESTION: u32 = 0x0000_0020;
 const MB_YESNO: u32 = 0x0000_0004;
 const IDYES: i32 = 6;
 
-const ID_INSTALL: usize = 1;
-const ID_BROWSE: usize = 2;
-const ID_CANCEL: usize = 3;
+const ID_INSTALL: usize = 1; // IDOK: Enter activates the default button
+const ID_CANCEL: usize = 2; // IDCANCEL: Esc closes the window
+const ID_BROWSE: usize = 101;
+const ID_LAUNCH: usize = 102;
+
+/// The icon ships next to the WiX source; embedding the bytes avoids a resource
+/// compiler step just for a window icon.
+const ICON_BYTES: &[u8] = include_bytes!("../../localreel.ico");
 
 /// Everything the window procedure needs, reached through `GWLP_USERDATA`.
 struct Ui {
     location_edit: HWND,
     status: HWND,
+    progress: HWND,
+    launch_check: HWND,
     install_button: HWND,
     browse_button: HWND,
     cancel_button: HWND,
@@ -87,6 +111,7 @@ struct Ui {
     result: Arc<Mutex<Option<Result<(), InstallFailure>>>>,
     large_font: HFONT,
     body_font: HFONT,
+    scale: f64,
 }
 
 /// Windows can always host a window; if creating it still fails, `run` reports
@@ -98,6 +123,9 @@ pub fn available() -> bool {
 /// `None` means "no window"; the caller falls back to the console flow.
 pub fn run(options: &Options, text: &'static Text) -> Option<u32> {
     unsafe {
+        // Crisp text on scaled displays: the layout below is computed from the
+        // system DPI rather than assuming 96.
+        let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         // A GUI process started from Explorer still owns the console the
         // subsystem allocated; releasing it removes that stray black window.
         windows_sys::Win32::System::Console::FreeConsole();
@@ -111,14 +139,19 @@ pub fn run(options: &Options, text: &'static Text) -> Option<u32> {
         return Some(uninstall(options, text));
     }
 
+    let dpi = unsafe { GetDpiForSystem() } as f64;
+    let scale = if dpi <= 0.0 { 1.0 } else { dpi / 96.0 };
+
     let instance = unsafe { GetModuleHandleW(std::ptr::null()) };
     let class_name = wide("LocalReelSetupWindow");
+    let icon = unsafe { load_icon() };
     let mut window_class: WNDCLASSW = unsafe { std::mem::zeroed() };
     window_class.lpfnWndProc = Some(window_proc);
     window_class.hInstance = instance;
     window_class.lpszClassName = class_name.as_ptr();
     window_class.hCursor = unsafe { LoadCursorW(std::ptr::null_mut(), IDC_ARROW) };
     window_class.hbrBackground = (COLOR_WINDOW + 1) as *mut c_void;
+    window_class.hIcon = icon;
     if unsafe { RegisterClassW(&window_class) } == 0 {
         note(&format!(
             "RegisterClassW failed: {}",
@@ -127,13 +160,21 @@ pub fn run(options: &Options, text: &'static Text) -> Option<u32> {
         return None;
     }
 
+    unsafe {
+        let mut controls: INITCOMMONCONTROLSEX = std::mem::zeroed();
+        controls.dwSize = std::mem::size_of::<INITCOMMONCONTROLSEX>() as u32;
+        controls.dwICC = ICC_PROGRESS_CLASS;
+        InitCommonControlsEx(&controls);
+    }
+
     let title = wide(&text.format(text.app_title, &[("version", VERSION)]));
     let window_style = WS_OVERLAPPEDWINDOW & !0x0002_0000 & !0x0001_0000; // no maximize / no resize
+    let client = (scaled(600, scale), scaled(344, scale));
     let mut rect = windows_sys::Win32::Foundation::RECT {
         left: 0,
         top: 0,
-        right: 600,
-        bottom: 380,
+        right: client.0,
+        bottom: client.1,
     };
     unsafe { AdjustWindowRectEx(&mut rect, window_style, 0, 0) };
 
@@ -142,7 +183,7 @@ pub fn run(options: &Options, text: &'static Text) -> Option<u32> {
             0,
             class_name.as_ptr(),
             title.as_ptr(),
-            window_style | WS_VISIBLE,
+            window_style,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
             rect.right - rect.left,
@@ -164,7 +205,7 @@ pub fn run(options: &Options, text: &'static Text) -> Option<u32> {
     let body_font = unsafe { GetStockObject(DEFAULT_GUI_FONT) as HFONT };
     let large_font = unsafe {
         CreateFontW(
-            -22,
+            -scaled(22, scale),
             0,
             0,
             0,
@@ -181,24 +222,41 @@ pub fn run(options: &Options, text: &'static Text) -> Option<u32> {
         )
     };
 
+    // A previous run's folder beats the compiled default, unless /D said
+    // otherwise.
+    let initial = if options.explicit_dir {
+        options.install_dir.clone()
+    } else {
+        win::last_install_dir().unwrap_or_else(|| options.install_dir.clone())
+    };
+
     let mut state = Box::new(Ui {
         location_edit: std::ptr::null_mut(),
         status: std::ptr::null_mut(),
+        progress: std::ptr::null_mut(),
+        launch_check: std::ptr::null_mut(),
         install_button: std::ptr::null_mut(),
         browse_button: std::ptr::null_mut(),
         cancel_button: std::ptr::null_mut(),
         text,
-        target: options.install_dir.clone(),
+        target: initial,
         busy: false,
         exit_code: 2,
         result: Arc::new(Mutex::new(None)),
         large_font,
         body_font,
+        scale,
     });
 
     unsafe {
         create_children(hwnd, instance, state.as_mut());
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, Box::into_raw(state) as isize);
+        ShowWindow(hwnd, SW_SHOW);
+        UpdateWindow(hwnd);
+        if !icon.is_null() {
+            SendMessageW(hwnd, WM_SETICON, ICON_BIG, icon as isize);
+            SendMessageW(hwnd, WM_SETICON, ICON_SMALL, icon as isize);
+        }
     }
 
     let mut message: MSG = unsafe { std::mem::zeroed() };
@@ -302,16 +360,17 @@ fn uninstall(options: &Options, text: &'static Text) -> u32 {
     0
 }
 
-/// Fill the window with its controls.
+/// Fill the window with its controls. Every coordinate below is for 96 DPI and
+/// goes through `scaled`.
 unsafe fn create_children(hwnd: HWND, instance: *mut c_void, state: &mut Ui) {
+    let scale = state.scale;
     let heading = wide(
         &state
             .text
-            .format(state.text.app_title, &[("version", VERSION)]),
+            .format(state.text.gui_heading, &[("version", VERSION)]),
     );
-    let mut body = format!("{}\r\n{}", state.text.intro, state.text.per_user);
+    let mut body = format!("{}\r\n{}\r\n\r\n", state.text.intro, state.text.per_user);
     if let Some(installed) = super::installed_version() {
-        body.push_str("\r\n\r\n");
         body.push_str(
             &state
                 .text
@@ -327,6 +386,7 @@ unsafe fn create_children(hwnd: HWND, instance: *mut c_void, state: &mut Ui) {
     let install_label = wide(state.text.gui_install);
     let browse_label = wide(state.text.gui_browse);
     let cancel_label = wide(state.text.gui_cancel);
+    let launch_label = wide(state.text.gui_launch_after);
     let target = wide(&state.target.to_string_lossy());
 
     let heading_box = child(
@@ -335,34 +395,36 @@ unsafe fn create_children(hwnd: HWND, instance: *mut c_void, state: &mut Ui) {
         "STATIC",
         &heading,
         SS_LEFT | SS_NOPREFIX,
-        24,
-        22,
-        552,
-        32,
+        scaled(24, scale),
+        scaled(18, scale),
+        scaled(552, scale),
+        scaled(30, scale),
     );
     font(heading_box, state.large_font as usize);
+
     let body_box = child(
         instance,
         hwnd,
         "STATIC",
         &body,
         SS_LEFT | SS_NOPREFIX,
-        24,
-        62,
-        552,
-        78,
+        scaled(24, scale),
+        scaled(56, scale),
+        scaled(552, scale),
+        scaled(74, scale),
     );
     font(body_box, state.body_font as usize);
+
     let label = child(
         instance,
         hwnd,
         "STATIC",
         &location_label,
         SS_LEFT | SS_NOPREFIX,
-        24,
-        160,
-        552,
-        20,
+        scaled(24, scale),
+        scaled(146, scale),
+        scaled(552, scale),
+        scaled(18, scale),
     );
     font(label, state.body_font as usize);
 
@@ -371,11 +433,11 @@ unsafe fn create_children(hwnd: HWND, instance: *mut c_void, state: &mut Ui) {
         hwnd,
         "EDIT",
         &target,
-        WS_BORDER | WS_TABSTOP | ES_AUTOHSCROLL | WS_VSCROLL,
-        24,
-        182,
-        420,
-        26,
+        WS_BORDER | WS_TABSTOP | ES_AUTOHSCROLL,
+        scaled(24, scale),
+        scaled(168, scale),
+        scaled(400, scale),
+        scaled(26, scale),
     );
     font(edit, state.body_font as usize);
     state.location_edit = edit;
@@ -386,12 +448,13 @@ unsafe fn create_children(hwnd: HWND, instance: *mut c_void, state: &mut Ui) {
         "BUTTON",
         &browse_label,
         WS_TABSTOP,
-        452,
-        181,
-        124,
-        28,
+        scaled(432, scale),
+        scaled(167, scale),
+        scaled(120, scale),
+        scaled(28, scale),
     );
     font(browse, state.body_font as usize);
+    identify(browse, ID_BROWSE);
     state.browse_button = browse;
 
     let library = child(
@@ -400,12 +463,29 @@ unsafe fn create_children(hwnd: HWND, instance: *mut c_void, state: &mut Ui) {
         "STATIC",
         &data_line,
         SS_LEFT | SS_NOPREFIX,
-        24,
-        220,
-        552,
-        20,
+        scaled(24, scale),
+        scaled(204, scale),
+        scaled(552, scale),
+        scaled(18, scale),
     );
     font(library, state.body_font as usize);
+
+    let progress = child(
+        instance,
+        hwnd,
+        "msctls_progress32",
+        &wide(""),
+        0,
+        scaled(24, scale),
+        scaled(232, scale),
+        scaled(552, scale),
+        scaled(14, scale),
+    );
+    if !progress.is_null() {
+        SendMessageW(progress, PBM_SETRANGE32, 0, 100);
+        ShowWindow(progress, SW_HIDE);
+    }
+    state.progress = progress;
 
     let status = child(
         instance,
@@ -413,13 +493,44 @@ unsafe fn create_children(hwnd: HWND, instance: *mut c_void, state: &mut Ui) {
         "STATIC",
         &wide(""),
         SS_LEFT | SS_NOPREFIX,
-        24,
-        252,
-        552,
-        20,
+        scaled(24, scale),
+        scaled(254, scale),
+        scaled(552, scale),
+        scaled(18, scale),
     );
     font(status, state.body_font as usize);
     state.status = status;
+
+    let separator = child(
+        instance,
+        hwnd,
+        "STATIC",
+        &wide(""),
+        SS_ETCHEDHORZ,
+        scaled(24, scale),
+        scaled(282, scale),
+        scaled(552, scale),
+        scaled(2, scale),
+    );
+    if !separator.is_null() {
+        font(separator, state.body_font as usize);
+    }
+
+    let launch = child(
+        instance,
+        hwnd,
+        "BUTTON",
+        &launch_label,
+        WS_TABSTOP | BS_AUTOCHECKBOX,
+        scaled(24, scale),
+        scaled(294, scale),
+        scaled(320, scale),
+        scaled(24, scale),
+    );
+    font(launch, state.body_font as usize);
+    identify(launch, ID_LAUNCH);
+    SendMessageW(launch, BM_SETCHECK, BST_CHECKED as usize, 0);
+    state.launch_check = launch;
 
     let install = child(
         instance,
@@ -427,12 +538,13 @@ unsafe fn create_children(hwnd: HWND, instance: *mut c_void, state: &mut Ui) {
         "BUTTON",
         &install_label,
         WS_TABSTOP | BS_DEFPUSHBUTTON,
-        372,
-        300,
-        100,
-        34,
+        scaled(360, scale),
+        scaled(292, scale),
+        scaled(100, scale),
+        scaled(32, scale),
     );
     font(install, state.body_font as usize);
+    identify(install, ID_INSTALL);
     state.install_button = install;
 
     let cancel = child(
@@ -441,16 +553,14 @@ unsafe fn create_children(hwnd: HWND, instance: *mut c_void, state: &mut Ui) {
         "BUTTON",
         &cancel_label,
         WS_TABSTOP,
-        482,
-        300,
-        94,
-        34,
+        scaled(472, scale),
+        scaled(292, scale),
+        scaled(104, scale),
+        scaled(32, scale),
     );
     font(cancel, state.body_font as usize);
+    identify(cancel, ID_CANCEL);
     state.cancel_button = cancel;
-
-    ShowWindow(hwnd, SW_SHOW);
-    UpdateWindow(hwnd);
 }
 
 // The Win32 call itself takes this many positional values; bundling them into a
@@ -484,6 +594,13 @@ unsafe fn child(
     )
 }
 
+/// Windows sends the control's ID with every `WM_COMMAND`. A child created with
+/// a null menu handle starts out with ID 0, so every button would look alike;
+/// this stamps the real one.
+unsafe fn identify(control: HWND, id: usize) {
+    SetWindowLongPtrW(control, GWLP_ID, id as isize);
+}
+
 unsafe fn font(control: HWND, font: usize) {
     SendMessageW(control, WM_SETFONT, font, 1);
 }
@@ -499,10 +616,14 @@ unsafe extern "system" fn window_proc(
             let id = wparam & 0xffff;
             match id {
                 ID_INSTALL => start(hwnd),
-                ID_BROWSE => choose_directory(hwnd),
                 ID_CANCEL => cancel(hwnd),
+                ID_BROWSE => choose_directory(hwnd),
                 _ => {}
             }
+            0
+        }
+        WM_KEYDOWN if wparam == VK_ESCAPE as usize => {
+            cancel(hwnd);
             0
         }
         WM_CLOSE => {
@@ -518,10 +639,14 @@ unsafe extern "system" fn window_proc(
         }
         WM_APP_PROGRESS => {
             if let Some(state) = state(hwnd) {
-                let percent = wparam.to_string();
+                let percent = wparam.min(100);
+                if !state.progress.is_null() {
+                    SendMessageW(state.progress, PBM_SETPOS, percent, 0);
+                }
+                let percent_text = percent.to_string();
                 let line = state
                     .text
-                    .format(state.text.gui_installing, &[("percent", &percent)]);
+                    .format(state.text.gui_installing, &[("percent", &percent_text)]);
                 let line = wide(&line);
                 SetWindowTextW(state.status, line.as_ptr());
             }
@@ -570,6 +695,11 @@ unsafe fn start(hwnd: HWND) {
     EnableWindow(state.browse_button, 0);
     EnableWindow(state.install_button, 0);
     EnableWindow(state.cancel_button, 0);
+    EnableWindow(state.launch_check, 0);
+    if !state.progress.is_null() {
+        SendMessageW(state.progress, PBM_SETPOS, 0, 0);
+        ShowWindow(state.progress, SW_SHOW);
+    }
 
     let slot = Arc::clone(&state.result);
     let hwnd_value = hwnd as isize;
@@ -603,6 +733,7 @@ unsafe fn finish(hwnd: HWND) {
     match outcome {
         Ok(()) => {
             state.exit_code = 0;
+            win::remember_install_dir(&state.target);
             let body = wide(&state.text.format(state.text.done, &[("version", VERSION)]));
             let caption = wide(state.text.gui_done_title);
             MessageBoxW(
@@ -611,9 +742,8 @@ unsafe fn finish(hwnd: HWND) {
                 caption.as_ptr(),
                 MB_OK | MB_ICONINFORMATION,
             );
-            let question = wide(state.text.launch_question);
-            let answer = MessageBoxW(hwnd, question.as_ptr(), caption.as_ptr(), MB_YESNO);
-            if answer == IDYES {
+            let launch = SendMessageW(state.launch_check, BM_GETCHECK, 0, 0) == BST_CHECKED;
+            if launch {
                 super::launch_installed(&state.target);
             }
             DestroyWindow(hwnd);
@@ -624,6 +754,10 @@ unsafe fn finish(hwnd: HWND) {
             EnableWindow(state.browse_button, 1);
             EnableWindow(state.install_button, 1);
             EnableWindow(state.cancel_button, 1);
+            EnableWindow(state.launch_check, 1);
+            if !state.progress.is_null() {
+                ShowWindow(state.progress, SW_HIDE);
+            }
             let message = match failure {
                 InstallFailure::Busy => state.text.busy.to_string(),
                 InstallFailure::Failed(error) => {
@@ -678,10 +812,57 @@ unsafe fn choose_directory(hwnd: HWND) {
     SetWindowTextW(state.location_edit, chosen.as_ptr());
 }
 
+/// Pull the largest image out of the embedded `.ico` and turn it into an HICON.
+unsafe fn load_icon() -> windows_sys::Win32::UI::WindowsAndMessaging::HICON {
+    let bytes = ICON_BYTES;
+    if bytes.len() < 22 {
+        return std::ptr::null_mut();
+    }
+    let count = u16::from_le_bytes([bytes[4], bytes[5]]) as usize;
+    let mut best: Option<(usize, usize)> = None;
+    for index in 0..count {
+        let entry = 6 + index * 16;
+        if entry + 16 > bytes.len() {
+            break;
+        }
+        let size = u32::from_le_bytes([
+            bytes[entry + 8],
+            bytes[entry + 9],
+            bytes[entry + 10],
+            bytes[entry + 11],
+        ]) as usize;
+        let offset = u32::from_le_bytes([
+            bytes[entry + 12],
+            bytes[entry + 13],
+            bytes[entry + 14],
+            bytes[entry + 15],
+        ]) as usize;
+        if offset + size <= bytes.len() && best.is_none_or(|(_, current)| size > current) {
+            best = Some((offset, size));
+        }
+    }
+    let Some((offset, size)) = best else {
+        return std::ptr::null_mut();
+    };
+    CreateIconFromResourceEx(
+        bytes[offset..offset + size].as_ptr(),
+        size as u32,
+        1,
+        0x0003_0000,
+        0,
+        0,
+        0,
+    )
+}
+
 unsafe fn delete_font(font: HFONT) {
     if !font.is_null() {
         windows_sys::Win32::Graphics::Gdi::DeleteObject(font);
     }
+}
+
+fn scaled(value: i32, scale: f64) -> i32 {
+    (value as f64 * scale).round() as i32
 }
 
 fn wide(text: &str) -> Vec<u16> {

@@ -13,6 +13,28 @@ use winreg::RegKey;
 pub const UNINSTALL_KEY: &str =
     "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{6E7B1C2A-9C41-4E3B-8A55-0B0A0F6C1D21}";
 
+/// Where the window remembers the folder the user picked last time.
+const SETUP_STATE_KEY: &str = "Software\\LocalReel\\Setup";
+
+/// The folder a previous run installed to, if the user picked one.
+pub fn last_install_dir() -> Option<PathBuf> {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let key = hkcu
+        .open_subkey_with_flags(SETUP_STATE_KEY, KEY_READ)
+        .ok()?;
+    let value: String = key.get_value("InstallDir").ok()?;
+    let path = PathBuf::from(value);
+    path.is_absolute().then_some(path)
+}
+
+/// Remember a successful install folder; failure is not worth interrupting.
+pub fn remember_install_dir(dir: &Path) {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    if let Ok((key, _)) = hkcu.create_subkey(SETUP_STATE_KEY) {
+        let _ = key.set_value("InstallDir", &dir.to_string_lossy().to_string());
+    }
+}
+
 /// Environment variable holding the user's AppData\Local.
 pub fn local_app_data() -> PathBuf {
     match std::env::var_os("LOCALAPPDATA") {

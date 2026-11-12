@@ -62,6 +62,9 @@ mod run {
         /// not start anything; an update wants the program back afterwards.
         force_launch: bool,
         install_dir: PathBuf,
+        /// True when `/D=` asked for a folder explicitly; the window then keeps
+        /// that folder instead of the one remembered from the last run.
+        explicit_dir: bool,
     }
 
     impl Options {
@@ -75,6 +78,7 @@ mod run {
                 wait: false,
                 force_launch: false,
                 install_dir: win::invocation_install_dir(),
+                explicit_dir: false,
             };
             let mut args = args.peekable();
             while let Some(argument) = args.next() {
@@ -104,10 +108,12 @@ mod run {
                             return Err(text.help.to_string());
                         }
                         options.install_dir = PathBuf::from(raw);
+                        options.explicit_dir = true;
                     }
                     "--dir" | "/D" => {
                         let raw = args.next().ok_or_else(|| text.help.to_string())?;
                         options.install_dir = PathBuf::from(raw);
+                        options.explicit_dir = true;
                     }
                     other => {
                         return Err(text.format(text.unknown_argument, &[("argument", other)]));

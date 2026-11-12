@@ -71,6 +71,7 @@ pub struct Text {
     pub unknown_argument: &'static str,
     pub help: &'static str,
     // Graphical installer window.
+    pub gui_heading: &'static str,
     pub gui_location: &'static str,
     pub gui_browse: &'static str,
     pub gui_install: &'static str,
@@ -78,6 +79,7 @@ pub struct Text {
     pub gui_installing: &'static str,
     pub gui_done_title: &'static str,
     pub gui_error_title: &'static str,
+    pub gui_launch_after: &'static str,
 }
 
 static ZH: Text = Text {
@@ -110,6 +112,8 @@ static ZH: Text = Text {
     gui_installing: "正在安装… {percent}%",
     gui_done_title: "安装完成",
     gui_error_title: "安装失败",
+    gui_heading: "安装 LocalReel {version}",
+    gui_launch_after: "安装完成后启动 LocalReel",
 };
 
 static EN: Text = Text {
@@ -142,6 +146,8 @@ static EN: Text = Text {
     gui_installing: "Installing… {percent}%",
     gui_done_title: "Installation complete",
     gui_error_title: "Setup failed",
+    gui_heading: "Install LocalReel {version}",
+    gui_launch_after: "Start LocalReel when setup finishes",
 };
 
 impl Text {
