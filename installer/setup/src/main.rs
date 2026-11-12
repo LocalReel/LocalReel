@@ -65,6 +65,10 @@ mod run {
         /// True when `/D=` asked for a folder explicitly; the window then keeps
         /// that folder instead of the one remembered from the last run.
         explicit_dir: bool,
+        /// Skip the Start Menu link (the window has checkboxes for both links).
+        no_start_menu: bool,
+        /// Skip the desktop link.
+        no_desktop: bool,
     }
 
     impl Options {
@@ -79,6 +83,8 @@ mod run {
                 force_launch: false,
                 install_dir: win::invocation_install_dir(),
                 explicit_dir: false,
+                no_start_menu: false,
+                no_desktop: false,
             };
             let mut args = args.peekable();
             while let Some(argument) = args.next() {
@@ -89,6 +95,8 @@ mod run {
                     "/removedata" | "--removedata" => options.remove_data = true,
                     "/nolaunch" | "--nolaunch" => options.launch = false,
                     "/launch" | "--launch" => options.force_launch = true,
+                    "/nostartmenu" | "--nostartmenu" => options.no_start_menu = true,
+                    "/nodesktop" | "--nodesktop" | "/nodesktopicon" => options.no_desktop = true,
                     "/wait" | "--wait" => options.wait = true,
                     value if value.starts_with("/lang=") || value.starts_with("--lang=") => {
                         let raw = value.split_once('=').map(|(_, value)| value).unwrap_or("");
@@ -213,8 +221,16 @@ mod run {
             println!("{}", text.installing);
         }
 
+        let mut shortcuts = Vec::new();
+        if !options.no_start_menu {
+            shortcuts.push(win::start_menu_shortcut());
+        }
+        if !options.no_desktop {
+            shortcuts.push(win::desktop_shortcut());
+        }
+
         let mut quiet = |_done: usize, _total: usize| {};
-        if let Err(failure) = perform_install(target, options.wait, &mut quiet) {
+        if let Err(failure) = perform_install(target, options.wait, &mut quiet, &shortcuts) {
             match failure {
                 InstallFailure::Busy => println!("{}", text.busy),
                 InstallFailure::Failed(error) => {
@@ -249,57 +265,88 @@ mod run {
         }
 
         let target = &options.install_dir;
-        let detached = win::detach_running_copy(target);
-        for shortcut in win::shortcut_paths() {
-            let _ = fs::remove_file(shortcut);
-        }
-        if let Err(error) = win::unregister_uninstall() {
-            eprintln!("could not remove the uninstall entry: {error}");
-        }
-        remove_program_files(target);
-        if let Some(temp) = detached {
-            let _ = fs::remove_file(temp);
-        }
-        if target.join("localreel.exe").is_file() {
-            println!(
-                "{}",
-                text.format(text.failed, &[("error", "localreel.exe is still in place")])
-            );
+        let outcome = perform_uninstall(
+            target,
+            options.remove_data,
+            &recorded_shortcuts(target),
+            text,
+        );
+        if let Some(error) = outcome.error {
+            println!("{}", text.format(text.failed, &[("error", &error)]));
             return pause_exit(text, 1);
         }
 
         println!("{}", text.uninstall_done);
-        let libraries = [win::data_dir(), target.join("data")];
-        if options.remove_data {
-            for data in libraries {
-                if !data.is_dir() {
-                    continue;
-                }
-                match win::remove_dir_all_with_retry(&data) {
-                    Ok(()) => println!(
-                        "{}",
-                        text.format(text.data_removed, &[("dir", &data.to_string_lossy())])
-                    ),
-                    Err(error) => println!(
-                        "{}",
-                        text.format(text.failed, &[("error", &error.to_string())])
-                    ),
-                }
-            }
-        } else {
-            for data in libraries {
-                if data.is_dir() {
-                    println!(
-                        "{}",
-                        text.format(text.data_kept, &[("dir", &data.to_string_lossy())])
-                    );
-                }
-            }
+        for line in outcome.messages {
+            println!("{line}");
         }
         if !options.silent {
             pause(text);
         }
         ExitCode::SUCCESS
+    }
+
+    /// What the uninstaller removed.
+    struct UninstallOutcome {
+        /// Fatal: the program file survived.
+        error: Option<String>,
+        /// User-facing lines about the library and any non-fatal failure.
+        messages: Vec<String>,
+    }
+
+    /// Remove the program and, when asked, the library. Shared by the console
+    /// flow and the window so both report the same thing.
+    fn perform_uninstall(
+        target: &Path,
+        remove_data: bool,
+        shortcuts: &[PathBuf],
+        text: &Text,
+    ) -> UninstallOutcome {
+        let detached = win::detach_running_copy(target);
+        for shortcut in shortcuts {
+            let _ = fs::remove_file(shortcut);
+        }
+        if let Err(error) = win::unregister_uninstall() {
+            eprintln!("could not remove the uninstall entry: {error}");
+        }
+        win::clear_install_record();
+        remove_program_files(target);
+        if let Some(temp) = detached {
+            let _ = fs::remove_file(temp);
+        }
+        if target.join("localreel.exe").is_file() {
+            return UninstallOutcome {
+                error: Some("localreel.exe is still in place".to_string()),
+                messages: Vec::new(),
+            };
+        }
+
+        let libraries = [win::data_dir(), target.join("data")];
+        let mut messages = Vec::new();
+        if remove_data {
+            for data in libraries {
+                if !data.is_dir() {
+                    continue;
+                }
+                match win::remove_dir_all_with_retry(&data) {
+                    Ok(()) => messages
+                        .push(text.format(text.data_removed, &[("dir", &data.to_string_lossy())])),
+                    Err(error) => {
+                        messages.push(text.format(text.failed, &[("error", &error.to_string())]))
+                    }
+                }
+            }
+        } else {
+            for data in libraries {
+                if data.is_dir() {
+                    messages.push(text.format(text.data_kept, &[("dir", &data.to_string_lossy())]));
+                }
+            }
+        }
+        UninstallOutcome {
+            error: None,
+            messages,
+        }
     }
 
     /// Start the installed program, preferring the GUI launcher.
@@ -321,6 +368,7 @@ mod run {
         target: &Path,
         wait: bool,
         progress: &mut dyn FnMut(usize, usize),
+        shortcuts: &[PathBuf],
     ) -> Result<(), InstallFailure> {
         if wait && win::is_running(target) {
             let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
@@ -333,8 +381,33 @@ mod run {
         }
         let files = extract_payload_with_progress(target, PAYLOAD, progress)
             .map_err(InstallFailure::Failed)?;
-        finish_install(target, files).map_err(InstallFailure::Failed)?;
+        finish_install(target, files, shortcuts).map_err(InstallFailure::Failed)?;
         Ok(())
+    }
+
+    /// Shortcuts that belong to the current installation.
+    ///
+    /// The manifest records exactly what was created; older manifests have no
+    /// list, and those installs owned both links.
+    fn recorded_shortcuts(target: &Path) -> Vec<PathBuf> {
+        fs::read_to_string(target.join("install.json"))
+            .ok()
+            .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+            .and_then(|value| {
+                value
+                    .get("shortcuts")
+                    .and_then(|list| list.as_array())
+                    .cloned()
+            })
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(|item| item.as_str())
+                    .map(PathBuf::from)
+                    .collect::<Vec<_>>()
+            })
+            .filter(|list| !list.is_empty())
+            .unwrap_or_else(win::shortcut_paths)
     }
 
     /// Unpack the embedded payload.
@@ -428,7 +501,11 @@ mod run {
     }
 
     /// Everything after the files: manifest, uninstall entry, shortcuts.
-    fn finish_install(target: &Path, mut files: Vec<String>) -> Result<(), String> {
+    fn finish_install(
+        target: &Path,
+        mut files: Vec<String>,
+        shortcuts: &[PathBuf],
+    ) -> Result<(), String> {
         let self_copy = target.join("localreel-setup.exe");
         if let Ok(current) = std::env::current_exe() {
             if current != self_copy {
@@ -450,17 +527,11 @@ mod run {
             .map(|meta| meta.len())
             .sum::<u64>()
             / 1024;
-        let manifest = serde_json::json!({
-            "product": "LocalReel",
-            "file_manifest_version": 2,
-            "version": VERSION,
-            "build": BUILD_STAMP,
-            "installed_at": timestamp(),
-            "install_dir": target.to_string_lossy(),
-            "per_user": true,
-            "estimated_kb": estimated_kb,
-            "files": files,
-        });
+        let shortcut_list: Vec<String> = shortcuts
+            .iter()
+            .map(|path| path.to_string_lossy().to_string())
+            .collect();
+        let manifest = build_manifest(target, &files, &shortcut_list, estimated_kb);
         fs::write(
             target.join("install.json"),
             serde_json::to_string_pretty(&manifest).map_err(|error| error.to_string())?,
@@ -472,8 +543,8 @@ mod run {
         } else {
             target.join("localreel.exe")
         };
-        for shortcut in win::shortcut_paths() {
-            if let Err(error) = win::create_shortcut(&shortcut, &launcher, target, "LocalReel") {
+        for shortcut in shortcuts {
+            if let Err(error) = win::create_shortcut(shortcut, &launcher, target, "LocalReel") {
                 // A missing Desktop is not worth failing the install for.
                 eprintln!("shortcut {}: {error}", shortcut.display());
             }
@@ -482,15 +553,44 @@ mod run {
         let uninstall_string = format!("\"{}\" /uninstall", self_copy.display());
         win::register_uninstall(target, VERSION, estimated_kb, &uninstall_string)
             .map_err(|error| format!("cannot register the uninstall entry: {error}"))?;
+        win::record_install(target, VERSION, &win::data_dir());
         Ok(())
     }
 
+    /// The JSON written next to the program.
+    ///
+    /// `shortcuts` lists only the links this run created: uninstall must not
+    /// delete a link the user asked us not to make.
+    fn build_manifest(
+        target: &Path,
+        files: &[String],
+        shortcuts: &[String],
+        estimated_kb: u64,
+    ) -> serde_json::Value {
+        serde_json::json!({
+            "product": "LocalReel",
+            "file_manifest_version": 2,
+            "version": VERSION,
+            "build": BUILD_STAMP,
+            "installed_at": timestamp(),
+            "install_dir": target.to_string_lossy(),
+            "per_user": true,
+            "estimated_kb": estimated_kb,
+            "files": files,
+            "shortcuts": shortcuts,
+        })
+    }
+
     fn installed_version() -> Option<String> {
-        let hkcu = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER);
-        let key = hkcu
-            .open_subkey_with_flags(win::UNINSTALL_KEY, winreg::enums::KEY_READ)
-            .ok()?;
-        key.get_value::<String, _>("DisplayVersion").ok()
+        // The product key is written by this installer; the uninstall entry
+        // covers copies installed by older versions.
+        win::installed_version().or_else(|| {
+            let hkcu = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER);
+            let key = hkcu
+                .open_subkey_with_flags(win::UNINSTALL_KEY, winreg::enums::KEY_READ)
+                .ok()?;
+            key.get_value::<String, _>("DisplayVersion").ok()
+        })
     }
 
     fn timestamp() -> String {
@@ -656,6 +756,52 @@ mod run {
         fn rejects_unknown_arguments() {
             let error = parse(&["--frobnicate"]).unwrap_err();
             assert!(error.contains("--frobnicate"));
+        }
+
+        #[test]
+        fn the_manifest_lists_only_the_shortcuts_that_were_created() {
+            let dir = std::env::temp_dir()
+                .join(format!("localreel-manifest-test-{}", std::process::id()));
+            let files = vec!["localreel.exe".to_string()];
+            let start = dir.join("Start Menu").join("LocalReel.lnk");
+            let value = build_manifest(&dir, &files, &[start.to_string_lossy().to_string()], 42);
+            let listed = value["shortcuts"].as_array().unwrap();
+            assert_eq!(listed.len(), 1);
+            assert_eq!(listed[0], start.to_string_lossy().as_ref());
+            assert_eq!(value["file_manifest_version"], 2);
+        }
+
+        #[test]
+        fn uninstall_reads_the_shortcuts_recorded_by_the_install() {
+            let dir = std::env::temp_dir()
+                .join(format!("localreel-shortcuts-test-{}", std::process::id()));
+            fs::create_dir_all(&dir).unwrap();
+            fs::write(
+                dir.join("install.json"),
+                serde_json::json!({
+                    "file_manifest_version": 2,
+                    "files": ["localreel.exe"],
+                    "shortcuts": ["C:\\Users\\someone\\Desktop\\LocalReel.lnk"],
+                })
+                .to_string(),
+            )
+            .unwrap();
+            let recorded = recorded_shortcuts(&dir);
+            assert_eq!(
+                recorded,
+                vec![PathBuf::from("C:\\Users\\someone\\Desktop\\LocalReel.lnk")]
+            );
+            let _ = fs::remove_dir_all(&dir);
+        }
+
+        #[test]
+        fn shortcut_switches_are_parsed() {
+            let options = parse(&["/nodesktop", "/nostartmenu"]).unwrap();
+            assert!(options.no_desktop);
+            assert!(options.no_start_menu);
+            let defaults = parse(&[]).unwrap();
+            assert!(!defaults.no_desktop);
+            assert!(!defaults.no_start_menu);
         }
 
         #[test]

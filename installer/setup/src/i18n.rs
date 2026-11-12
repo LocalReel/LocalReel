@@ -80,6 +80,13 @@ pub struct Text {
     pub gui_done_title: &'static str,
     pub gui_error_title: &'static str,
     pub gui_launch_after: &'static str,
+    pub gui_shortcut_start: &'static str,
+    pub gui_shortcut_desktop: &'static str,
+    pub gui_uninstall_heading: &'static str,
+    pub gui_uninstall_prompt: &'static str,
+    pub gui_remove_data: &'static str,
+    pub gui_uninstall_button: &'static str,
+    pub gui_uninstalling: &'static str,
 }
 
 static ZH: Text = Text {
@@ -114,6 +121,13 @@ static ZH: Text = Text {
     gui_error_title: "安装失败",
     gui_heading: "安装 LocalReel {version}",
     gui_launch_after: "安装完成后启动 LocalReel",
+    gui_shortcut_start: "创建开始菜单快捷方式",
+    gui_shortcut_desktop: "创建桌面快捷方式",
+    gui_uninstall_heading: "卸载 LocalReel",
+    gui_uninstall_prompt: "将从当前账户中移除 LocalReel。程序文件和快捷方式会被删除。",
+    gui_remove_data: "同时删除媒体库和数据（不可恢复）",
+    gui_uninstall_button: "卸载",
+    gui_uninstalling: "正在卸载…",
 };
 
 static EN: Text = Text {
@@ -148,6 +162,13 @@ static EN: Text = Text {
     gui_error_title: "Setup failed",
     gui_heading: "Install LocalReel {version}",
     gui_launch_after: "Start LocalReel when setup finishes",
+    gui_shortcut_start: "Create a Start Menu shortcut",
+    gui_shortcut_desktop: "Create a desktop shortcut",
+    gui_uninstall_heading: "Uninstall LocalReel",
+    gui_uninstall_prompt: "LocalReel will be removed from this account. Program files and shortcuts are deleted.",
+    gui_remove_data: "Also delete the library and data (cannot be undone)",
+    gui_uninstall_button: "Uninstall",
+    gui_uninstalling: "Uninstalling…",
 };
 
 impl Text {

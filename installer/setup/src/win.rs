@@ -16,6 +16,56 @@ pub const UNINSTALL_KEY: &str =
 /// Where the window remembers the folder the user picked last time.
 const SETUP_STATE_KEY: &str = "Software\\LocalReel\\Setup";
 
+/// The product's own registry key: installation path, version and library.
+const APP_KEY: &str = "Software\\LocalReel";
+
+/// Publish where this copy lives, so upgrades and the uninstaller can find it
+/// even when the install folder was changed.
+pub fn record_install(install_dir: &Path, version: &str, data_dir: &Path) {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    if let Ok((key, _)) = hkcu.create_subkey(APP_KEY) {
+        let _ = key.set_value("InstallPath", &install_dir.to_string_lossy().to_string());
+        let _ = key.set_value("Version", &version.to_string());
+        let _ = key.set_value("DataDir", &data_dir.to_string_lossy().to_string());
+    }
+}
+
+/// Remove the product key on uninstall; the Apps & Features entry goes with it.
+pub fn clear_install_record() {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let _ = hkcu.delete_subkey_all(APP_KEY);
+}
+
+/// The installed folder, preferring the product key and falling back to the
+/// uninstall entry written by older versions.
+pub fn installed_dir() -> Option<PathBuf> {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    if let Ok(key) = hkcu.open_subkey_with_flags(APP_KEY, KEY_READ) {
+        if let Ok(value) = key.get_value::<String, _>("InstallPath") {
+            let path = PathBuf::from(value);
+            if path.is_absolute() {
+                return Some(path);
+            }
+        }
+    }
+    if let Ok(key) = hkcu.open_subkey_with_flags(UNINSTALL_KEY, KEY_READ) {
+        if let Ok(value) = key.get_value::<String, _>("InstallLocation") {
+            let path = PathBuf::from(value);
+            if path.is_absolute() {
+                return Some(path);
+            }
+        }
+    }
+    None
+}
+
+/// The version recorded by the last install, if any.
+pub fn installed_version() -> Option<String> {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let key = hkcu.open_subkey_with_flags(APP_KEY, KEY_READ).ok()?;
+    key.get_value("Version").ok()
+}
+
 /// The folder a previous run installed to, if the user picked one.
 pub fn last_install_dir() -> Option<PathBuf> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
@@ -139,12 +189,17 @@ pub fn start_menu_programs_dir() -> PathBuf {
     })
 }
 
-/// The shortcuts this installer owns.
+pub fn start_menu_shortcut() -> PathBuf {
+    start_menu_programs_dir().join("LocalReel.lnk")
+}
+
+pub fn desktop_shortcut() -> PathBuf {
+    desktop_dir().join("LocalReel.lnk")
+}
+
+/// Both shortcuts, in the order the manifest lists them.
 pub fn shortcut_paths() -> Vec<PathBuf> {
-    vec![
-        start_menu_programs_dir().join("LocalReel.lnk"),
-        desktop_dir().join("LocalReel.lnk"),
-    ]
+    vec![start_menu_shortcut(), desktop_shortcut()]
 }
 
 /// Write one {@code .lnk} pointing at the launcher.
