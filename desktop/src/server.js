@@ -45,8 +45,11 @@ function serverCandidates({ env = process.env, appPath, resourcesPath } = {}) {
   if (appPath) {
     candidates.push(path.join(path.dirname(appPath), 'server', exe))
     candidates.push(path.join(path.dirname(appPath), exe))
-    // The installer puts the shell in `desktop\` next to the server, so the
-    // sibling above the app directory is where an installed copy lives.
+    // A packaged app has appPath = <install>\desktop\resources\app.asar, so the
+    // server one level above `desktop\` is three levels up from the file.
+    candidates.push(path.join(path.dirname(appPath), '..', '..', exe))
+    // A development checkout keeps the shell in `desktop\` and the server in
+    // the repository root.
     candidates.push(path.join(path.dirname(appPath), '..', exe))
   }
   candidates.push(exe)

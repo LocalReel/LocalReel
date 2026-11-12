@@ -403,15 +403,29 @@ mod run {
             })
     }
 
-    /// Start the installed program, preferring the GUI launcher.
-    fn launch_installed(target: &Path) -> bool {
+    /// The program the shortcuts start.
+    ///
+    /// The Electron shell in `desktop\` is the desktop app. `localreel-desktop.exe`
+    /// only starts the server and opens the default browser, so it is the
+    /// fallback for packages that ship without a shell.
+    fn launcher_for(target: &Path) -> PathBuf {
+        let shell = target.join("desktop").join("LocalReel.exe");
+        if shell.is_file() {
+            return shell;
+        }
         let launcher = target.join("localreel-desktop.exe");
-        let launcher = if launcher.is_file() {
-            launcher
-        } else {
-            target.join("localreel.exe")
-        };
-        Command::new(launcher).current_dir(target).spawn().is_ok()
+        if launcher.is_file() {
+            return launcher;
+        }
+        target.join("localreel.exe")
+    }
+
+    /// Start the installed program, preferring the desktop shell.
+    fn launch_installed(target: &Path) -> bool {
+        Command::new(launcher_for(target))
+            .current_dir(target)
+            .spawn()
+            .is_ok()
     }
 
     /// Copy the payload into `target` and finish the per-user registration.
@@ -603,11 +617,7 @@ mod run {
         )
         .map_err(|error| format!("cannot write install.json: {error}"))?;
 
-        let launcher = if target.join("localreel-desktop.exe").is_file() {
-            target.join("localreel-desktop.exe")
-        } else {
-            target.join("localreel.exe")
-        };
+        let launcher = launcher_for(target);
         for shortcut in shortcuts {
             if let Err(error) = win::create_shortcut(shortcut, &launcher, target, "LocalReel") {
                 // A missing Desktop is not worth failing the install for.
@@ -879,6 +889,28 @@ mod run {
             let defaults = parse(&[]).unwrap();
             assert!(!defaults.no_desktop);
             assert!(!defaults.no_start_menu);
+        }
+
+        #[test]
+        fn shortcuts_prefer_the_desktop_shell_over_the_browser_launcher() {
+            let dir = std::env::temp_dir().join(format!(
+                "localreel-launcher-test-{}",
+                std::process::id()
+            ));
+            let _ = fs::remove_dir_all(&dir);
+            fs::create_dir_all(&dir).unwrap();
+            assert_eq!(launcher_for(&dir), dir.join("localreel.exe"));
+
+            fs::write(dir.join("localreel-desktop.exe"), b"launcher").unwrap();
+            assert_eq!(launcher_for(&dir), dir.join("localreel-desktop.exe"));
+
+            fs::create_dir_all(dir.join("desktop")).unwrap();
+            fs::write(dir.join("desktop").join("LocalReel.exe"), b"shell").unwrap();
+            assert_eq!(
+                launcher_for(&dir),
+                dir.join("desktop").join("LocalReel.exe")
+            );
+            let _ = fs::remove_dir_all(&dir);
         }
 
         #[test]

@@ -82,6 +82,20 @@ test('the installer layout is searched, where the server sits above the shell', 
   )
 })
 
+test('the packaged layout finds the server above desktop\\', () => {
+  const path = require('node:path')
+  const install = 'C:/Users/x/AppData/Local/Programs/LocalReel'
+  const candidates = serverCandidates({
+    env: {},
+    appPath: path.join(install, 'desktop', 'resources', 'app.asar'),
+    resourcesPath: path.join(install, 'desktop', 'resources'),
+  })
+  assert.ok(
+    candidates.includes(path.join(install, 'localreel.exe')),
+    `the server three levels above app.asar must be a candidate, got ${candidates.join(', ')}`,
+  )
+})
+
 test('a probe that times out is a miss, not an exception', async () => {
   const fetchImpl = fakeFetch([new Error('ECONNREFUSED')])
   assert.equal(await probe(fetchImpl, 'http://127.0.0.1:1'), null)

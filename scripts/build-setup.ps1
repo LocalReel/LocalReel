@@ -48,22 +48,33 @@ if (-not $Output) {
 }
 
 $payload = Join-Path ([System.IO.Path]::GetTempPath()) ("localreel-payload-" + [guid]::NewGuid() + '.zip')
+# Compress-Archive keeps every file handle open in one pass and fails with a
+# vague "stream is not readable" when a file is swapped underneath it; Windows
+# ships bsdtar, which is also several times faster on a 300 MB tree.
+function New-PayloadArchive([string]$Source) {
+    Push-Location -LiteralPath $Source
+    try {
+        & tar.exe -a -c -f $payload .
+        if ($LASTEXITCODE -ne 0) { throw "tar failed with exit code $LASTEXITCODE" }
+    } finally {
+        Pop-Location
+    }
+}
 try {
     Write-Host "staging payload from $Stage ..."
     if ($Exclude.Count -gt 0) {
-        # Compress-Archive has no exclude switch, so stage a filtered copy.
         $filtered = Join-Path ([System.IO.Path]::GetTempPath()) ("localreel-payload-src-" + [guid]::NewGuid())
         New-Item -ItemType Directory -Path $filtered | Out-Null
         try {
             Get-ChildItem -LiteralPath $Stage | Where-Object { $Exclude -notcontains $_.Name } | ForEach-Object {
                 Copy-Item -LiteralPath $_.FullName -Destination $filtered -Recurse
             }
-            Compress-Archive -Path (Join-Path $filtered '*') -DestinationPath $payload -CompressionLevel Optimal -Force
+            New-PayloadArchive $filtered
         } finally {
             Remove-Item -LiteralPath $filtered -Recurse -Force -ErrorAction SilentlyContinue
         }
     } else {
-        Compress-Archive -Path (Join-Path $Stage '*') -DestinationPath $payload -CompressionLevel Optimal -Force
+        New-PayloadArchive $Stage
     }
     if (-not (Test-Path $payload)) { throw 'payload archive was not created' }
     Write-Host ("payload: {0:N1} MiB" -f ((Get-Item $payload).Length / 1MB))
